@@ -99,18 +99,42 @@ function reduce(notes, difficulty) {
   return out;
 }
 
+/** Drum part: kick on the beat, snare on 2 and 4, hi-hat eighths, a crash to open each phrase. */
+function composeDrums(endTick, difficulty) {
+  const notes = [];
+  const add = (tick, lane, cymbal = false) => notes.push({ tick, lane, length: 0, force: null, tap: false, cymbal });
+  const dense = difficulty === 'expert' || difficulty === 'hard';
+  for (let tick = 4 * Q; tick < endTick - 4 * Q; tick += Q) {
+    const beat = (tick / Q) % 4;
+    const bar = Math.floor(tick / (4 * Q));
+    add(tick, OPEN_LANE); // kick
+    if (beat === 1 || beat === 3) add(tick, 0); // snare (red)
+    if (dense) {
+      add(tick, beat === 0 && bar % 4 === 1 ? 3 : 1, true); // hi-hat (yellow cymbal) / crash (green)
+      add(tick + E, 1, true);
+    } else if (beat === 0 && difficulty === 'medium') add(tick, 1, true);
+  }
+  return notes;
+}
+
 export function buildDemoSong() {
   const { notes, sp, endTick } = composeExpert();
   const tempoMap = new TempoMap(RES, [{ tick: 0, bpm: BPM }], [{ tick: 0, numerator: 4, denominator: 4 }]);
   const tracks = { 'guitar:expert': { notes, starPower: sp, solos: [] } };
   for (const d of ['easy', 'medium', 'hard']) tracks[`guitar:${d}`] = { notes: reduce(notes, d), starPower: sp, solos: [] };
+  for (const d of ['easy', 'medium', 'hard', 'expert']) tracks[`drums:${d}`] = { notes: composeDrums(endTick, d), starPower: sp, solos: [] };
   return {
     song: {
       format: 'demo',
       resolution: RES,
       tempoMap,
       meta: {},
-      sections: [],
+      sections: [
+        { tick: 4 * Q, name: 'Melody' },
+        { tick: 20 * Q, name: 'Runs' },
+        { tick: 36 * Q, name: 'Chords' },
+        { tick: 52 * Q, name: 'Opens & taps' },
+      ],
       tracks,
       hopoThresholdTicks: (RES * 65) / 192,
     },

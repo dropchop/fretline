@@ -676,6 +676,13 @@ body.sp-active #game {
   font-weight: 800;
 }
 
+.map-prompt {
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-align: center;
+  min-height: 2em;
+}
+
 .rotate-hint {
   display: none;
 }
@@ -696,4 +703,15 @@ body.sp-active #game {
 
 [hidden] {
   display: none !important;
+}
+
+.best {
+  color: var(--y);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.song-list .best {
+  display: block;
 }

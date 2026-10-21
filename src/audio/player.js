@@ -31,6 +31,7 @@ export class AudioPlayer {
     this.playing = false;
     this.calibrationSec = 0;
     this.anchor = null;
+    this.rate = 1; // playback speed; song time advances at this rate
   }
 
   /**
@@ -79,13 +80,14 @@ export class AudioPlayer {
   play(from = 0) {
     this.stopSources();
     const now = this.ctx.currentTime + 0.05;
-    this.startCtxTime = now - from;
+    this.startCtxTime = now - from / this.rate;
     for (const stem of this.stems) {
       const src = this.ctx.createBufferSource();
       src.buffer = stem.buffer;
+      src.playbackRate.value = this.rate;
       src.connect(stem.gain);
       if (from >= 0) src.start(now, from);
-      else src.start(now - from, 0);
+      else src.start(now - from / this.rate, 0);
       stem.source = src;
     }
     this.playing = true;
@@ -136,6 +138,6 @@ export class AudioPlayer {
       ctxTime = Math.min(this.anchor.raw + (now - this.anchor.now) / 1000, raw + 0.05);
     }
     const latency = (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0);
-    return ctxTime - this.startCtxTime - latency - this.calibrationSec;
+    return (ctxTime - this.startCtxTime) * this.rate - latency - this.calibrationSec;
   }
 }

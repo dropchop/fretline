@@ -59,6 +59,16 @@
         <div class="chips" id="instrumentChips"></div>
         <h3>Difficulty</h3>
         <div class="chips" id="difficultyChips"></div>
+        <p class="best" id="setupBest"></p>
+        <label class="field" id="sectionField">
+          <span>Practice section</span>
+          <select id="section"><option value="">Whole song</option></select>
+        </label>
+        <label class="field">
+          <span>Practice speed <output id="speedOut">100%</output></span>
+          <input type="range" id="speed" min="50" max="100" step="5" value="100" />
+          <small class="muted">Below 100% the song plays slower and scores don't count as records.</small>
+        </label>
         <button class="btn primary big" data-action="start">Play</button>
         <button class="btn danger subtle" data-action="delete-song" id="deleteSong">Remove from library</button>
       </section>
@@ -93,8 +103,19 @@
             <option value="strum">Hold frets + strum (keyboard)</option>
           </select>
         </label>
+        <button class="btn subtle" data-action="map-controller">Set up controller buttons</button>
         <label class="toggle"><input type="checkbox" id="leftHanded" /> Left-handed (mirror lanes)</label>
         <label class="toggle"><input type="checkbox" id="muteOnMiss" /> Mute the guitar on misses</label>
+      </section>
+
+      <!-- Controller mapping -->
+      <section class="screen" id="controller">
+        <button class="back" data-action="back">‹ Back</button>
+        <h2>Controller</h2>
+        <p id="controllerStatus" class="muted">Connect a gamepad or guitar controller and press any button.</p>
+        <p id="controllerPrompt" class="map-prompt"></p>
+        <p id="controllerMap" class="muted small"></p>
+        <button class="btn subtle" data-action="reset-controller">Use default layout</button>
       </section>
 
       <!-- Calibration -->
@@ -140,6 +161,7 @@
         <h2 id="resultsName"></h2>
         <div class="stars" id="resultsStars"></div>
         <div class="result-score" id="resultsScore"></div>
+        <p class="best" id="resultsBest"></p>
         <dl class="result-stats" id="resultsStats"></dl>
         <button class="btn primary" data-action="retry">Play again</button>
         <button class="btn subtle" data-action="to-library">Library</button>

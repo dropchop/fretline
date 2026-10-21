@@ -9,6 +9,11 @@ import { importFiles, readPackage, audioStems, albumArt } from './library/loader
 import { listSongs, saveSong, deleteSong, requestPersistentStorage } from './library/store.js';
 import { buildDemoSong, renderDemoAudio } from './demo/demoSong.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { getHighScore, getBestForSong, submitScore } from './library/highscores.js';
+import { GamepadControls, DEFAULT_GAMEPAD_MAP } from './input/gamepad.js';
+
+const DEMO_ID = 'demo::neon-highway';
+const selectedId = () => (state.selected?.demo ? DEMO_ID : state.selected?.pkg?.id);
 
 const $ = (sel) => document.querySelector(sel);
 const settings = loadSettings();
@@ -90,6 +95,13 @@ function renderLibrary() {
     artist.className = 'artist';
     artist.textContent = song.meta.artist;
     text.append(title, artist);
+    const best = getBestForSong(song.id);
+    if (best) {
+      const b = document.createElement('span');
+      b.className = 'best';
+      b.textContent = `${'★'.repeat(Math.min(5, best.stars))}${best.fullCombo ? ' FC' : ''} ${best.score.toLocaleString()}`;
+      text.append(b);
+    }
     btn.append(thumb, text);
     btn.addEventListener('click', () => openSong(song));
     li.append(btn);
@@ -157,6 +169,7 @@ function selectSong(selection) {
   art.style.backgroundImage = state.setupArtUrl ? `url("${state.setupArtUrl}")` : '';
   $('#deleteSong').hidden = !!selection.demo;
 
+  renderSections(selection.chart);
   const tracks = availableTracks(selection.chart.song);
   const instruments = Object.keys(INSTRUMENTS).filter((i) => tracks[i]);
   if (!instruments.length) {
@@ -177,6 +190,36 @@ function selectSong(selection) {
   show('setup');
 }
 
+// Section practice options come from the chart's section markers.
+function renderSections(chart) {
+  const select = $('#section');
+  select.replaceChildren(new Option('Whole song', ''));
+  const { sections, tempoMap } = chart.song;
+  const offset = (chart.offsetMs || 0) / 1000;
+  sections.forEach((s, i) => {
+    const start = tempoMap.tickToTime(s.tick) + offset;
+    const end = i + 1 < sections.length ? tempoMap.tickToTime(sections[i + 1].tick) + offset : Infinity;
+    select.append(new Option(s.name, JSON.stringify({ start, end })));
+  });
+  $('#sectionField').hidden = sections.length === 0;
+}
+
+function selectedRange() {
+  const v = $('#section').value;
+  return v ? JSON.parse(v) : null;
+}
+
+function isPracticeRun() {
+  return Number($('#speed').value) < 100 || !!selectedRange();
+}
+
+function renderBest() {
+  const best = getHighScore(selectedId(), state.instrument, state.difficulty);
+  $('#setupBest').textContent = best
+    ? `Best: ${best.score.toLocaleString()} · ${'★'.repeat(Math.min(5, best.stars))}${best.fullCombo ? ' Full combo' : ''} · ${Math.round(best.accuracy * 100)}%`
+    : 'Not played yet';
+}
+
 function renderDifficulties(tracks) {
   const diffs = DIFFICULTIES.filter((d) => tracks[state.instrument].includes(d));
   if (!diffs.includes(state.difficulty)) {
@@ -186,8 +229,12 @@ function renderDifficulties(tracks) {
     '#difficultyChips',
     diffs.map((d) => [d, d[0].toUpperCase() + d.slice(1)]),
     () => state.difficulty,
-    (v) => (state.difficulty = v),
+    (v) => {
+      state.difficulty = v;
+      renderBest();
+    },
   );
+  renderBest();
 }
 
 function renderChips(sel, options, get, set) {
@@ -254,6 +301,8 @@ async function startGame() {
       settings,
       renderer,
       hud: state.hud,
+      speed: Number($('#speed').value) / 100,
+      range: selectedRange(),
       surface: $('#touchSurface'),
       onFinish: showResults,
       onPauseRequest: pauseGame,
@@ -313,6 +362,9 @@ function showResults(stats) {
     stars.append(s);
   }
   $('#resultsScore').textContent = stats.score.toLocaleString();
+  const practice = isPracticeRun();
+  const record = !practice && submitScore(selectedId(), state.instrument, state.difficulty, stats);
+  $('#resultsBest').textContent = practice ? 'Practice run (not recorded)' : record ? 'New record!' : '';
   const rows = [
     ['Notes hit', `${stats.hits} / ${stats.total}`],
     ['Accuracy', `${Math.round(stats.accuracy * 100)}%`],
@@ -434,6 +486,43 @@ function finishCalibration() {
   $('#calibrateResult').textContent = `Calibration set to ${settings.calibrationMs} ms.`;
 }
 
+// ---- Controller mapping -----------------------------------------------------------------
+
+const MAP_STEPS = [
+  ['frets', 0, 'Green fret'], ['frets', 1, 'Red fret'], ['frets', 2, 'Yellow fret'],
+  ['frets', 3, 'Blue fret'], ['frets', 4, 'Orange fret'],
+  ['strum', 0, 'Strum down'], ['strum', 1, 'Strum up'], ['starPower', 0, 'Star Power'], ['pause', 0, 'Pause'],
+];
+let mapAbort = null;
+
+function describeMap(map) {
+  return `Frets: ${map.frets.join(', ')} · Strum: ${map.strum.join(', ')} · Star Power: ${map.starPower.join(', ')} · Pause: ${map.pause.join(', ')} (button numbers)`;
+}
+
+async function startControllerMapping() {
+  show('controller');
+  mapAbort?.abort();
+  mapAbort = new AbortController();
+  const { signal } = mapAbort;
+  $('#controllerMap').textContent = describeMap(settings.gamepadMap ?? DEFAULT_GAMEPAD_MAP);
+  $('#controllerStatus').textContent = 'Connect a gamepad or guitar controller and press any button.';
+  $('#controllerPrompt').textContent = '';
+  if ((await GamepadControls.nextPress(signal)) === null) return;
+  $('#controllerStatus').textContent = 'Controller found. Press each button as asked.';
+  const map = { frets: [], strum: [], starPower: [], pause: [] };
+  for (const [group, , label] of MAP_STEPS) {
+    $('#controllerPrompt').textContent = `Press: ${label}`;
+    const button = await GamepadControls.nextPress(signal);
+    if (button === null) return;
+    map[group].push(button);
+    await new Promise((r) => setTimeout(r, 250)); // let the button release
+  }
+  settings.gamepadMap = map;
+  saveSettings(settings);
+  $('#controllerPrompt').textContent = 'Saved!';
+  $('#controllerMap').textContent = describeMap(map);
+}
+
 // ---- Wiring -----------------------------------------------------------------------------
 
 const actions = {
@@ -441,6 +530,7 @@ const actions = {
   settings: () => show('settings'),
   back: () => {
     clearTimeout(calibration.timer);
+    mapAbort?.abort();
     back();
   },
   start: startGame,
@@ -465,6 +555,14 @@ const actions = {
     show('menu', { push: false });
   },
   calibrate: startCalibration,
+  'map-controller': startControllerMapping,
+  'reset-controller': () => {
+    mapAbort?.abort();
+    settings.gamepadMap = null;
+    saveSettings(settings);
+    $('#controllerMap').textContent = describeMap(DEFAULT_GAMEPAD_MAP);
+    $('#controllerPrompt').textContent = 'Default layout restored.';
+  },
 };
 
 document.addEventListener('click', (e) => {
@@ -490,6 +588,11 @@ window.addEventListener('orientationchange', () => setTimeout(resizeStage, 200))
 
 bindSettings();
 refreshLibrary();
+$('#speed').addEventListener('input', () => ($('#speedOut').textContent = `${$('#speed').value}%`));
+// Offline support: cache the app shell after the first visit.
+if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 
 // Test hook: ?debug exposes app state for automated browser tests.
 if (new URLSearchParams(location.search).has('debug')) window.fretline = state;

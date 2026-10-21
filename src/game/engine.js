@@ -30,10 +30,12 @@ export class GameEngine {
    * @param {import('../chart/playable.js').PlayNote[]} notes
    * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, hitWindow?: number}} options
    */
-  constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.07 }) {
+  constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.07, drums = false }) {
     this.notes = notes;
     this.tempoMap = tempoMap;
-    this.mode = mode;
+    // Drums always use tap rules: each pad hit judges its own lane, the kick is an open note.
+    this.mode = drums ? 'tap' : mode;
+    this.drums = drums;
     this.hitWindow = hitWindow;
     this.state = new Uint8Array(notes.length);
     // Time at which a sustain stopped being held (Infinity while still holding / not started).
@@ -103,8 +105,9 @@ export class GameEngine {
     this.openHeld = true;
     if (this.mode !== 'tap') return;
     const effective = this.held & ~this.sustainingMask;
-    const note = this.#findInWindow(t, (n) => n.open && effective === 0);
+    const note = this.#findInWindow(t, (n) => n.open && (this.drums || effective === 0));
     if (note) this.#hit(note, t);
+    else if (this.drums && this.#anyPendingInWindow(t)) this.#overhit(t);
   }
 
   openUp(t) {
@@ -225,6 +228,12 @@ export class GameEngine {
   }
 
   #tapPress(t, lane) {
+    if (this.drums) {
+      const pad = this.#findInWindow(t, (n) => !n.open && n.lanes[0] === lane);
+      if (pad) this.#hit(pad, t);
+      else if (this.#anyPendingInWindow(t)) this.#overhit(t);
+      return;
+    }
     const effective = this.held & ~this.sustainingMask;
     const target = this.#findInWindow(t, (n) => !n.open && (n.mask & (1 << lane)) !== 0);
     if (target) {
@@ -252,9 +261,10 @@ export class GameEngine {
   }
 
   #hit(note, t) {
-    // Any earlier pending notes were skipped over.
+    // Any earlier pending notes were skipped over. Drum gems at the same instant are
+    // separate notes and may be hit in any order, so only earlier ticks count as skipped.
     for (let i = this.nextIndex; i < note.id; i++) {
-      if (this.state[i] === PENDING) this.#miss(this.notes[i], t);
+      if (this.state[i] === PENDING && !(this.drums && this.notes[i].tick === note.tick)) this.#miss(this.notes[i], t);
     }
     this.state[note.id] = HIT;
     this.hits++;
