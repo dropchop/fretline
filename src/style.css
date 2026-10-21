@@ -697,3 +697,14 @@ body.sp-active #game {
 [hidden] {
   display: none !important;
 }
+
+.best {
+  color: var(--y);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.song-list .best {
+  display: block;
+}

@@ -9,6 +9,10 @@ import { importFiles, readPackage, audioStems, albumArt } from './library/loader
 import { listSongs, saveSong, deleteSong, requestPersistentStorage } from './library/store.js';
 import { buildDemoSong, renderDemoAudio } from './demo/demoSong.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { getHighScore, getBestForSong, submitScore } from './library/highscores.js';
+
+const DEMO_ID = 'demo::neon-highway';
+const selectedId = () => (state.selected?.demo ? DEMO_ID : state.selected?.pkg?.id);
 
 const $ = (sel) => document.querySelector(sel);
 const settings = loadSettings();
@@ -90,6 +94,13 @@ function renderLibrary() {
     artist.className = 'artist';
     artist.textContent = song.meta.artist;
     text.append(title, artist);
+    const best = getBestForSong(song.id);
+    if (best) {
+      const b = document.createElement('span');
+      b.className = 'best';
+      b.textContent = `${'★'.repeat(Math.min(5, best.stars))}${best.fullCombo ? ' FC' : ''} ${best.score.toLocaleString()}`;
+      text.append(b);
+    }
     btn.append(thumb, text);
     btn.addEventListener('click', () => openSong(song));
     li.append(btn);
@@ -177,6 +188,13 @@ function selectSong(selection) {
   show('setup');
 }
 
+function renderBest() {
+  const best = getHighScore(selectedId(), state.instrument, state.difficulty);
+  $('#setupBest').textContent = best
+    ? `Best: ${best.score.toLocaleString()} · ${'★'.repeat(Math.min(5, best.stars))}${best.fullCombo ? ' Full combo' : ''} · ${Math.round(best.accuracy * 100)}%`
+    : 'Not played yet';
+}
+
 function renderDifficulties(tracks) {
   const diffs = DIFFICULTIES.filter((d) => tracks[state.instrument].includes(d));
   if (!diffs.includes(state.difficulty)) {
@@ -186,8 +204,12 @@ function renderDifficulties(tracks) {
     '#difficultyChips',
     diffs.map((d) => [d, d[0].toUpperCase() + d.slice(1)]),
     () => state.difficulty,
-    (v) => (state.difficulty = v),
+    (v) => {
+      state.difficulty = v;
+      renderBest();
+    },
   );
+  renderBest();
 }
 
 function renderChips(sel, options, get, set) {
@@ -254,6 +276,7 @@ async function startGame() {
       settings,
       renderer,
       hud: state.hud,
+      speed: Number($('#speed').value) / 100,
       surface: $('#touchSurface'),
       onFinish: showResults,
       onPauseRequest: pauseGame,
@@ -313,6 +336,9 @@ function showResults(stats) {
     stars.append(s);
   }
   $('#resultsScore').textContent = stats.score.toLocaleString();
+  const practice = Number($('#speed').value) < 100;
+  const record = !practice && submitScore(selectedId(), state.instrument, state.difficulty, stats);
+  $('#resultsBest').textContent = practice ? `Practice run at ${$('#speed').value}% speed (not recorded)` : record ? 'New record!' : '';
   const rows = [
     ['Notes hit', `${stats.hits} / ${stats.total}`],
     ['Accuracy', `${Math.round(stats.accuracy * 100)}%`],
@@ -490,6 +516,11 @@ window.addEventListener('orientationchange', () => setTimeout(resizeStage, 200))
 
 bindSettings();
 refreshLibrary();
+$('#speed').addEventListener('input', () => ($('#speedOut').textContent = `${$('#speed').value}%`));
+// Offline support: cache the app shell after the first visit.
+if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 
 // Test hook: ?debug exposes app state for automated browser tests.
 if (new URLSearchParams(location.search).has('debug')) window.fretline = state;

@@ -3,6 +3,7 @@ import { buildPlayableNotes } from '../chart/playable.js';
 import { GameEngine } from './engine.js';
 import { AudioPlayer } from '../audio/player.js';
 import { TouchControls, KeyboardControls } from '../input/controls.js';
+import { GamepadControls, anyGamepadConnected } from '../input/gamepad.js';
 import { resolveInputMode } from '../settings.js';
 
 const BASE_SPEED = 9; // world units per second at note speed 1.0
@@ -29,8 +30,11 @@ export class GameSession {
       offsetMs: opts.chart.offsetMs,
       hopoThresholdTicks: opts.chart.hopoThresholdTicks,
     });
-    this.mode = resolveInputMode(opts.settings.inputMode);
+    // A connected controller plays by strum rules even on a touch device.
+    this.mode = anyGamepadConnected() && opts.settings.inputMode === 'auto' ? 'strum' : resolveInputMode(opts.settings.inputMode);
+    this.speed = opts.speed ?? 1; // practice speed, 1 = normal
     this.audio = new AudioPlayer();
+    this.audio.rate = this.speed;
     this.audio.calibrationSec = opts.settings.calibrationMs / 1000;
     this.audio.setVolume(opts.settings.volume);
     this.stemName = INSTRUMENT_STEM[opts.instrument];
@@ -96,6 +100,7 @@ export class GameSession {
     };
     this.touch = new TouchControls(this.surface, () => this.renderer.laneScreenPositions(), handlers);
     this.keyboard = new KeyboardControls(handlers);
+    this.gamepad = new GamepadControls(handlers);
     this.hud.onStarPower = () => handlers.starPower(performance.now());
   }
 
@@ -106,6 +111,7 @@ export class GameSession {
     this.lastFrame = now;
     if (this.paused) return;
 
+    this.gamepad.poll();
     const t = this.audio.songTime();
     this.engine.update(t);
     for (const ev of this.engine.takeEvents()) this.#handleEvent(ev);
@@ -161,6 +167,7 @@ export class GameSession {
     this.running = false;
     this.touch?.dispose();
     this.keyboard?.dispose();
+    this.gamepad?.dispose();
     this.audio.stopSources();
     if (this.audio.ctx.state === 'suspended') this.audio.ctx.resume();
     document.removeEventListener('visibilitychange', this.onVisibility);
