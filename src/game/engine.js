@@ -12,6 +12,8 @@ const MAX_MULTIPLIER = 4;
 const SP_PER_PHRASE = 0.25;
 const SP_MIN_TO_ACTIVATE = 0.5;
 const SP_BEATS_FOR_FULL_METER = 32;
+/** Hits within this many seconds of the note count as "perfect" for feedback (not scoring). */
+export const PERFECT_WINDOW = 0.025;
 // Fraction of a perfect run's score (without star power) needed for 1-5 stars.
 // This game's own thresholds, not Clone Hero's. A full combo earns gold stars.
 const STAR_THRESHOLDS = [0.15, 0.35, 0.55, 0.75, 0.9];
@@ -56,6 +58,8 @@ export class GameEngine {
     this.misses = 0;
     this.spMeter = 0;
     this.spActive = false;
+    /** Hit offsets in seconds (negative = early), in hit order, for timing feedback. */
+    this.offsets = [];
     /** Events for the presentation layer; drain with takeEvents(). */
     this.events = [];
 
@@ -177,6 +181,8 @@ export class GameEngine {
     const total = this.notes.length;
     const ratio = this.perfectScore ? this.score / this.perfectScore : 0;
     const fullCombo = total > 0 && this.hits === total;
+    const offsets = this.offsets;
+    const meanOffsetMs = offsets.length ? (offsets.reduce((a, b) => a + b, 0) / offsets.length) * 1000 : 0;
     return {
       score: Math.round(this.score),
       hits: this.hits,
@@ -186,6 +192,10 @@ export class GameEngine {
       maxStreak: this.maxStreak,
       stars: fullCombo ? 6 : STAR_THRESHOLDS.filter((s) => ratio >= s).length,
       fullCombo,
+      offsets,
+      meanOffsetMs,
+      early: offsets.filter((o) => o < -PERFECT_WINDOW).length,
+      late: offsets.filter((o) => o > PERFECT_WINDOW).length,
     };
   }
 
@@ -279,6 +289,7 @@ export class GameEngine {
     this.maxStreak = Math.max(this.maxStreak, this.streak);
     this.lastNoteHit = true;
     if (note.sustain) this.activeSustains.push({ note, scoredUntil: Math.max(t, note.time) });
+    this.offsets.push(t - note.time);
     this.events.push({ type: 'hit', note, time: t, offset: t - note.time });
     if (note.spEnd && !this.brokenPhrases.has(note.spPhrase)) {
       this.spMeter = Math.min(1, this.spMeter + SP_PER_PHRASE);

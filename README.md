@@ -21,6 +21,13 @@ built-in generated demo song so it works out of the box.
 - **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
 - **Practice mode:** pick a section of the song and/or slow it down (50–100%). Practice runs aren't recorded.
 - **Drums:** 4-pad + kick drum charts from `.chart` and `.mid` (cymbals shown flat), with touch pads, Space / strum = kick.
+- **Auto-chart any audio file:** pick an MP3/OGG/etc. and the game detects the tempo and hits (spectral-flux onsets,
+  grid-fitted beats) and writes a four-difficulty chart. Results depend on how clear the beat is.
+- **Timing feedback:** Early / Perfect / Late on every hit, a timing histogram and advice on the results screen.
+- **Profile & history:** lifetime totals, an accuracy sparkline and recent plays.
+- **Pass & play versus:** two players take turns on one phone; the results screen names the winner.
+- **Tilt Star Power:** flick the phone to activate Star Power (DeviceOrientation; iOS asks for motion access).
+- **Highway themes:** Classic, Neon, Sunset, Monochrome.
 - **Controllers:** gamepads and guitar controllers via the Gamepad API, with a button-mapping screen in Settings.
   Default layout: frets on buttons 0–4, strum on the d-pad or stick, Star Power on Select, pause on Start.
   Untested on real guitar hardware.

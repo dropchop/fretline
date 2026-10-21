@@ -5,6 +5,7 @@ import { importFiles, albumArt } from '../../library/loader.js';
 import { listSongs, saveSong, deleteSong, requestPersistentStorage } from '../../library/store.js';
 import { getBestForSong } from '../../library/highscores.js';
 import { openSong, openDemo } from './setup.js';
+import { autoChartFile } from '../../library/autoImport.js';
 
 export async function refreshLibrary() {
   try {
@@ -84,7 +85,28 @@ export async function handleImport(fileList) {
   }
 }
 
+async function handleAutoChart(file) {
+  if (!file) return;
+  loading('Listening for beats…');
+  try {
+    const { files, meta, bpm, noteCount } = await autoChartFile(file);
+    const id = `auto|${meta.artist}|${meta.name}`.toLowerCase();
+    await saveSong({ id, files, meta });
+    requestPersistentStorage();
+    await refreshLibrary();
+    toast(`Charted "${meta.name}": ${Math.round(bpm)} BPM, ${noteCount} notes on expert.`);
+  } catch (err) {
+    toast(`Couldn't auto-chart ${file.name}: ${err.message}`, 7000);
+  } finally {
+    loading(null);
+  }
+}
+
 export function initLibrary() {
+  $('#audioInput').addEventListener('change', (e) => {
+    handleAutoChart(e.target.files[0]);
+    e.target.value = '';
+  });
   for (const id of ['#fileInput', '#folderInput']) {
     $(id).addEventListener('change', (e) => {
       handleImport([...e.target.files]);

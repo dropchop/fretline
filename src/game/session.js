@@ -6,6 +6,7 @@ import { TouchControls, KeyboardControls } from '../input/controls.js';
 import { GamepadControls, anyGamepadConnected } from '../input/gamepad.js';
 import { resolveInputMode } from '../settings.js';
 import { isDrums } from '../chart/constants.js';
+import { TiltControls } from '../input/tilt.js';
 
 const BASE_SPEED = 9; // world units per second at note speed 1.0
 const INSTRUMENT_STEM = {
@@ -84,7 +85,7 @@ export class GameSession {
   start() {
     const { renderer, settings } = this;
     renderer.leftHanded = settings.leftHanded;
-    renderer.configureLanes(this.drums ? 'drums' : 'guitar');
+    renderer.configureLanes(this.drums ? 'drums' : 'guitar', settings.theme);
     renderer.setNoteSpeed(BASE_SPEED * settings.noteSpeed);
     renderer.reset();
     this.engine = new GameEngine(this.notes, {
@@ -141,6 +142,8 @@ export class GameSession {
     this.touch = new TouchControls(this.surface, () => this.renderer.laneScreenPositions(), handlers);
     this.keyboard = new KeyboardControls(handlers);
     this.gamepad = new GamepadControls(handlers, this.settings.gamepadMap ?? undefined);
+    if (this.settings.tiltStarPower)
+      this.tilt = new TiltControls(() => handlers.starPower(performance.now()));
     this.hud.onStarPower = () => handlers.starPower(performance.now());
   }
 
@@ -209,6 +212,8 @@ export class GameSession {
     this.touch?.dispose();
     this.keyboard?.dispose();
     this.gamepad?.dispose();
+    this.tilt?.dispose();
+    this.tilt = null;
     this.audio.stopSources();
     if (this.audio.ctx.state === 'suspended') this.audio.ctx.resume();
     document.removeEventListener('visibilitychange', this.onVisibility);

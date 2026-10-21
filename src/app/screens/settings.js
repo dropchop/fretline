@@ -2,6 +2,7 @@
 import { $, show, registerActions } from '../router.js';
 import { settings } from '../state.js';
 import { saveSettings } from '../../settings.js';
+import { THEMES } from '../../render/highway.js';
 
 export function initSettings() {
   const range = (id, key, format) => {
@@ -19,7 +20,14 @@ export function initSettings() {
   range('calibration', 'calibrationMs', (v) => `${v} ms`);
   range('hitWindow', 'hitWindowMs', (v) => `±${v} ms`);
   range('volume', 'volume', (v) => `${Math.round(v * 100)}%`);
-  for (const key of ['leftHanded', 'muteOnMiss']) {
+  const theme = $('#theme');
+  for (const [key, t] of Object.entries(THEMES)) theme.append(new Option(t.label, key));
+  theme.value = settings.theme in THEMES ? settings.theme : 'classic';
+  theme.addEventListener('change', () => {
+    settings.theme = theme.value;
+    saveSettings(settings);
+  });
+  for (const key of ['leftHanded', 'muteOnMiss', 'tiltStarPower']) {
     const input = $(`#${key}`);
     input.checked = settings[key];
     input.addEventListener('change', () => {

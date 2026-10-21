@@ -18,6 +18,8 @@ export const state = {
   history: ['menu'],
   artUrls: [],
   setupArtUrl: null,
+  /** Pass-and-play: null when off, else the round in progress and player 1's result. */
+  versus: /** @type {{round: 1|2, first: object|null}|null} */ (null),
 };
 
 /** Library id of the selected song, used as the high-score key. */

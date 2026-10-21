@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = {
   instrument: 'guitar',
   difficulty: 'expert',
   gamepadMap: null, // null = default layout; see input/gamepad.js
+  theme: 'classic', // see render/highway.js THEMES
+  tiltStarPower: true, // flick the phone to activate Star Power
 };
 
 export function loadSettings() {

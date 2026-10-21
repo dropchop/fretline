@@ -7,10 +7,12 @@ import { initPlay } from './app/screens/play.js';
 import { initSettings } from './app/screens/settings.js';
 import { initCalibration, cancelCalibration } from './app/screens/calibration.js';
 import { initController, cancelControllerMapping } from './app/screens/controller.js';
+import { initProfile } from './app/screens/profile.js';
 
 initSettings();
 initCalibration();
 initController();
+initProfile();
 initSetup();
 initPlay();
 initLibrary();

@@ -107,6 +107,48 @@ await withServer(async () => {
   await page.waitForSelector('#results.active', { timeout: 120000 });
   console.log('sng song results:', (await page.locator('#resultsStats').innerText()).replace(/\n/g, ' '));
 
+  await page.tap('[data-action=to-library]');
+
+  // Auto-chart: the fixture is a 120 BPM tone loop.
+  await page.setInputFiles('#audioInput', path.join(fixtures, 'Fixture Band - Beat Loop.ogg'));
+  await page.waitForFunction(() => document.querySelectorAll('#songList li').length === 4, null, {
+    timeout: 60000,
+  });
+  const toast = await page.locator('#toast').innerText();
+  console.log('auto-chart:', toast);
+  const bpm = Number(toast.match(/(\d+) BPM/)?.[1]);
+  assert(Math.abs(bpm - 120) <= 2, `auto-chart tempo should be ~120 BPM, got ${bpm}`);
+
+  // Versus (pass & play): two rounds on the demo, then a winner.
+  await page.tap('[data-action=play-demo]');
+  await page.waitForSelector('#setup.active');
+  await page.locator('#instrumentChips .chip', { hasText: 'Guitar' }).tap();
+  await page.locator('#section').selectOption({ label: 'Melody' });
+  await page.check('#versus');
+  await page.tap('[data-action=start]');
+  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.evaluate(installBot);
+  await page.waitForSelector('#results.active', { timeout: 120000 });
+  assert((await page.locator('#resultsPlayer').textContent()) === 'Player 1', 'round 1 is player 1');
+  await page.tap('#nextPlayer');
+  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.evaluate(installBot, { skipEvery: 2 });
+  await page.waitForSelector('#results.active', { timeout: 120000 });
+  const versus = await page.locator('#resultsPlayer').textContent();
+  console.log('versus:', versus, '|', await page.locator('#resultsBest').innerText());
+  assert(versus.includes('Player 1 wins'), 'player 1 (full bot) beats player 2 (half the notes)');
+  assert((await page.locator('#resultsTiming svg').count()) === 1, 'timing histogram rendered');
+  await page.tap('[data-action=to-library]');
+
+  // Profile shows the recorded plays.
+  await page.tap('[data-action=profile]');
+  await page.waitForSelector('#profile.active');
+  const profile = await page.locator('#profileStats').innerText();
+  console.log('profile:', profile.replace(/\n/g, ' '));
+  assert(/Songs played\s+[1-9]/.test(profile), 'profile counts recorded plays');
+  await page.screenshot({ path: 'test/e2e/last-profile.png' });
+  await page.tap('#profile [data-action=back]');
+
   assert(errors.length === 0, `page errors: ${errors.join('; ')}`);
   await browser.close();
   console.log('smoke test passed');

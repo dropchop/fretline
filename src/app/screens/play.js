@@ -10,6 +10,7 @@ import { renderDemoAudio } from '../../demo/demoSong.js';
 import { saveSettings } from '../../settings.js';
 import { selectedRange, selectedSpeed } from './setup.js';
 import { showResults } from './results.js';
+import { requestTiltPermission } from '../../input/tilt.js';
 
 function ensureRenderer() {
   if (!state.renderer) {
@@ -28,8 +29,10 @@ export function resizeStage() {
 export async function startGame() {
   const sel = state.selected;
   if (!sel) return;
-  // Create/resume audio inside the tap that started the game (required on mobile).
+  // Create/resume audio and ask for motion access inside the tap that started the game.
   getAudioContext();
+  if (settings.tiltStarPower) requestTiltPermission();
+  if (!state.versus) state.versus = $('#versus').checked ? { round: 1, first: null } : null;
   settings.instrument = state.instrument;
   settings.difficulty = state.difficulty;
   saveSettings(settings);
@@ -94,6 +97,7 @@ function restartGame() {
 }
 
 function quitGame() {
+  state.versus = null;
   state.session?.dispose();
   state.session = null;
   $('#pauseMenu').hidden = true;
@@ -111,6 +115,11 @@ export function initPlay() {
     restart: restartGame,
     quit: quitGame,
     retry: () => {
+      state.versus = null;
+      show('setup', { push: false });
+      startGame();
+    },
+    'next-player': () => {
       show('setup', { push: false });
       startGame();
     },
