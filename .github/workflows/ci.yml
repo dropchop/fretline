@@ -19,7 +19,11 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
-      - run: npm run build
+      - run: npm run build:single
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fretline-single-file
+          path: dist/fretline.html
 
   browser:
     runs-on: ubuntu-latest

@@ -64,6 +64,18 @@ installing to the home screen and the screen wake lock. The included GitHub Page
 (`.github/workflows/pages.yml`) handles that: enable it once in **Settings → Pages → Source: GitHub
 Actions**, then every push to `main` deploys.
 
+## Single-file build
+
+```sh
+npm run build:single   # writes dist/fretline.html
+```
+
+`dist/fretline.html` is the whole game in one self-contained HTML file (about 700 kB, mostly Three.js):
+no server needed, it works opened straight from disk, by email or from a USB stick, and songs you import
+are still saved in the browser. What it drops compared with the hosted version: the web-app manifest
+(no "install to home screen") and the service worker (not needed, it's already local). On iPhone, the
+Files app previews HTML without running scripts, so open the file in Safari via a server or host it.
+
 ## Project layout
 
 | Path                    | What it does                                                                                                |
