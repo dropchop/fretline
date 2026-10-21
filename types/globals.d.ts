@@ -5,5 +5,5 @@ interface Navigator {
 }
 interface Window {
   /** Exposed with ?debug for automated browser tests. */
-  fretline?: object;
+  fretline?: any;
 }
