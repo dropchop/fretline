@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
     <meta name="theme-color" content="#07060d" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -24,8 +27,13 @@
           <button class="btn primary" data-action="play-demo">Play the demo song</button>
           <label class="btn">
             Add songs (.zip or song files)
-            <input type="file" id="fileInput" multiple hidden
-              accept=".zip,.chart,.mid,.midi,.ini,.ogg,.opus,.mp3,.wav,.m4a,.flac,.png,.jpg,.jpeg,.sng" />
+            <input
+              type="file"
+              id="fileInput"
+              multiple
+              hidden
+              accept=".zip,.chart,.mid,.midi,.ini,.ogg,.opus,.mp3,.wav,.m4a,.flac,.png,.jpg,.jpeg,.sng"
+            />
           </label>
           <label class="btn subtle" id="folderButton">
             Add a songs folder
@@ -40,8 +48,8 @@
           </div>
           <ul id="songList" class="song-list"></ul>
           <p id="emptyLibrary" class="muted">
-            No songs yet. Add a Clone Hero song as a .zip, or pick its files together
-            (notes.chart or notes.mid, song.ini and the audio such as song.ogg).
+            No songs yet. Add a Clone Hero song as a .zip, or pick its files together (notes.chart or
+            notes.mid, song.ini and the audio such as song.ogg).
           </p>
         </div>
       </section>
@@ -62,7 +70,9 @@
         <p class="best" id="setupBest"></p>
         <label class="field" id="sectionField">
           <span>Practice section</span>
-          <select id="section"><option value="">Whole song</option></select>
+          <select id="section">
+            <option value="">Whole song</option>
+          </select>
         </label>
         <label class="field">
           <span>Practice speed <output id="speedOut">100%</output></span>
@@ -70,7 +80,9 @@
           <small class="muted">Below 100% the song plays slower and scores don't count as records.</small>
         </label>
         <button class="btn primary big" data-action="start">Play</button>
-        <button class="btn danger subtle" data-action="delete-song" id="deleteSong">Remove from library</button>
+        <button class="btn danger subtle" data-action="delete-song" id="deleteSong">
+          Remove from library
+        </button>
       </section>
 
       <!-- Settings -->
@@ -112,7 +124,9 @@
       <section class="screen" id="controller">
         <button class="back" data-action="back">‹ Back</button>
         <h2>Controller</h2>
-        <p id="controllerStatus" class="muted">Connect a gamepad or guitar controller and press any button.</p>
+        <p id="controllerStatus" class="muted">
+          Connect a gamepad or guitar controller and press any button.
+        </p>
         <p id="controllerPrompt" class="map-prompt"></p>
         <p id="controllerMap" class="muted small"></p>
         <button class="btn subtle" data-action="reset-controller">Use default layout</button>
@@ -122,7 +136,9 @@
       <section class="screen" id="calibrate">
         <button class="back" data-action="back">‹ Back</button>
         <h2>Calibration</h2>
-        <p>Tap the big button in time with the clicks you hear. Use the headphones or speaker you play with.</p>
+        <p>
+          Tap the big button in time with the clicks you hear. Use the headphones or speaker you play with.
+        </p>
         <button class="tap-pad" id="tapPad">Tap</button>
         <p id="calibrateResult" class="muted"></p>
       </section>
@@ -168,7 +184,10 @@
       </section>
 
       <div class="overlay" id="loading" hidden>
-        <div class="panel"><div class="spinner"></div><p id="loadingText">Loading…</p></div>
+        <div class="panel">
+          <div class="spinner"></div>
+          <p id="loadingText">Loading…</p>
+        </div>
       </div>
       <div class="toast" id="toast" role="status"></div>
       <div class="rotate-hint">Turn your phone upright to play.</div>

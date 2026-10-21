@@ -60,17 +60,22 @@ export class Hud {
       el.multRing.style.setProperty('--p', String(progress));
     });
     this.#set('sp', Math.round(engine.spMeter * 100), (v) => el.spFill.style.setProperty('--sp', `${v}%`));
-    this.#set('spReady', engine.spMeter >= 0.5 && !engine.spActive, (v) => el.spButton.classList.toggle('ready', v));
+    this.#set('spReady', engine.spMeter >= 0.5 && !engine.spActive, (v) =>
+      el.spButton.classList.toggle('ready', v),
+    );
     this.#set('spActive', engine.spActive, (v) => document.body.classList.toggle('sp-active', v));
     const p = duration > 0 ? Math.max(0, Math.min(1, t / duration)) : 0;
     this.#set('progress', Math.round(p * 400), () => el.progress.style.setProperty('--p', String(p)));
   }
 
   event(ev, engine) {
-    if (ev.type === 'hit' && STREAK_MILESTONES.has(engine.streak)) this.popup(`${engine.streak} note streak!`);
-    if (ev.type === 'spGain' && engine.spMeter >= 0.5 && !engine.spActive) this.popup('Star Power ready!', 'sp');
+    if (ev.type === 'hit' && STREAK_MILESTONES.has(engine.streak))
+      this.popup(`${engine.streak} note streak!`);
+    if (ev.type === 'spGain' && engine.spMeter >= 0.5 && !engine.spActive)
+      this.popup('Star Power ready!', 'sp');
     if (ev.type === 'spActivate') this.popup('Star Power!', 'sp');
-    if (ev.type === 'multiplier') this.el.mult.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], 250);
+    if (ev.type === 'multiplier')
+      this.el.mult.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], 250);
   }
 
   popup(text, kind = '') {

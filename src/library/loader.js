@@ -31,14 +31,16 @@ async function expandFiles(fileList) {
       const jobs = [];
       zip.forEach((relPath, entry) => {
         if (entry.dir || relPath.startsWith('__MACOSX/')) return;
-        jobs.push(entry.async('blob').then((blob) => entries.push({ path: `${file.name}/${relPath}`, blob })));
+        jobs.push(
+          entry.async('blob').then((blob) => entries.push({ path: `${file.name}/${relPath}`, blob })),
+        );
       });
       await Promise.all(jobs);
     } else if (/\.sng$/i.test(file.name)) {
       try {
         const sng = parseSng(await file.arrayBuffer());
         for (const [name, data] of Object.entries(sng.files)) {
-          entries.push({ path: `${file.name}/${name}`, blob: new Blob([data]) });
+          entries.push({ path: `${file.name}/${name}`, blob: new Blob([/** @type {BlobPart} */ (data)]) });
         }
         entries.push({ path: `${file.name}/song.ini`, blob: new Blob([metadataToIni(sng.metadata)]) });
       } catch (err) {
@@ -78,7 +80,9 @@ export async function importFiles(fileList) {
     }
   }
   if (!songs.length && !errors.length) {
-    errors.push('No songs found. A song needs notes.chart or notes.mid plus its audio (e.g. song.ogg), or a .sng file.');
+    errors.push(
+      'No songs found. A song needs notes.chart or notes.mid plus its audio (e.g. song.ogg), or a .sng file.',
+    );
   }
   return { songs, errors };
 }
@@ -108,7 +112,7 @@ export async function readPackage(files) {
   };
   // song.ini delay (ms) and the .chart Offset both shift the chart against the audio.
   // Assumption: positive values make notes come later; most charts leave both at 0.
-  const offsetMs = (Number(ini.delay) || 0) + (song.meta.offsetMs || 0);
+  const offsetMs = (Number(ini.delay) || 0) + (Number(song.meta.offsetMs) || 0);
   const hopoThresholdTicks = ini.hopo_frequency ? Number(ini.hopo_frequency) : undefined;
   return { song, meta, offsetMs, hopoThresholdTicks };
 }

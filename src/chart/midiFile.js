@@ -81,7 +81,7 @@ const inSpans = (tick, spans) => spans.some((s) => tick >= s.tick && tick < s.ti
 
 // Drums: base+0 kick, base+1..4 red/yellow/blue/green. Charts without any tom markers are
 // not pro-charted, so their yellow/blue/green are treated as toms.
-function parseDrumTrack(t, resolution) {
+function parseDrumTrack(t) {
   const out = {};
   const starPower = t.spans.filter((s) => s.note === STAR_POWER_NOTE);
   const solos = t.spans.filter((s) => s.note === SOLO_NOTE);
@@ -123,6 +123,7 @@ export function parseMid(data) {
     }
   }
 
+  /** @type {Record<string, import('./constants.js').ParsedTrack>} */
   const tracks = {};
   const sections = [];
   for (const events of midi.tracks) {
@@ -137,7 +138,7 @@ export function parseMid(data) {
     const instrument = MIDI_INSTRUMENTS[t.name];
     if (!instrument) continue;
     if (instrument === 'drums') {
-      Object.assign(tracks, parseDrumTrack(t, resolution));
+      Object.assign(tracks, parseDrumTrack(t));
       continue;
     }
     const enhancedOpens = t.texts.some((x) => /^\[?ENHANCED_OPENS\]?$/.test(x.text));
@@ -157,6 +158,7 @@ export function parseMid(data) {
         else if (lane < 0 || lane > 4) continue;
         // Phase Shift open-note sysex turns green gems in its range into opens.
         if (lane === 0 && inRanges(s.tick, openRanges)) lane = OPEN_LANE;
+        /** @type {'strum'|'hopo'|null} */
         let force = null;
         if (inSpans(s.tick, forceStrum)) force = 'strum';
         else if (inSpans(s.tick, forceHopo)) force = 'hopo';

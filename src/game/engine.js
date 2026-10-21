@@ -28,7 +28,7 @@ const highestBit = (mask) => (mask ? 31 - Math.clz32(mask) : -1);
 export class GameEngine {
   /**
    * @param {import('../chart/playable.js').PlayNote[]} notes
-   * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, hitWindow?: number}} options
+   * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, hitWindow?: number, drums?: boolean}} options
    */
   constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.07, drums = false }) {
     this.notes = notes;
@@ -63,7 +63,11 @@ export class GameEngine {
     this.perfectScore = notes.reduce((sum, n, i) => {
       const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(i / NOTES_PER_MULTIPLIER));
       const sustainMult = Math.min(MAX_MULTIPLIER, 1 + Math.floor((i + 1) / NOTES_PER_MULTIPLIER));
-      return sum + POINTS_PER_GEM * Math.max(1, n.lanes.length) * mult + SUSTAIN_POINTS_PER_BEAT * n.sustainBeats * sustainMult;
+      return (
+        sum +
+        POINTS_PER_GEM * Math.max(1, n.lanes.length) * mult +
+        SUSTAIN_POINTS_PER_BEAT * n.sustainBeats * sustainMult
+      );
     }, 0);
   }
 
@@ -264,7 +268,8 @@ export class GameEngine {
     // Any earlier pending notes were skipped over. Drum gems at the same instant are
     // separate notes and may be hit in any order, so only earlier ticks count as skipped.
     for (let i = this.nextIndex; i < note.id; i++) {
-      if (this.state[i] === PENDING && !(this.drums && this.notes[i].tick === note.tick)) this.#miss(this.notes[i], t);
+      if (this.state[i] === PENDING && !(this.drums && this.notes[i].tick === note.tick))
+        this.#miss(this.notes[i], t);
     }
     this.state[note.id] = HIT;
     this.hits++;
@@ -279,7 +284,10 @@ export class GameEngine {
       this.spMeter = Math.min(1, this.spMeter + SP_PER_PHRASE);
       this.events.push({ type: 'spGain', time: t });
     }
-    if (this.streak % NOTES_PER_MULTIPLIER === 0 && this.streak <= NOTES_PER_MULTIPLIER * (MAX_MULTIPLIER - 1)) {
+    if (
+      this.streak % NOTES_PER_MULTIPLIER === 0 &&
+      this.streak <= NOTES_PER_MULTIPLIER * (MAX_MULTIPLIER - 1)
+    ) {
       this.events.push({ type: 'multiplier', time: t, value: this.multiplier });
     }
   }

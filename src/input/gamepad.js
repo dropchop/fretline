@@ -2,7 +2,12 @@
 // Default layout follows the common guitar-controller mapping (frets on the face buttons,
 // strum on the d-pad). Standard pads work too: A B X Y LB = frets, d-pad up/down = strum.
 /** Default button layout; the settings screen can replace it. */
-export const DEFAULT_GAMEPAD_MAP = { frets: [0, 1, 2, 3, 4], strum: [12, 13], starPower: [8, 6, 7], pause: [9] };
+export const DEFAULT_GAMEPAD_MAP = {
+  frets: [0, 1, 2, 3, 4],
+  strum: [12, 13],
+  starPower: [8, 6, 7],
+  pause: [9],
+};
 
 export function anyGamepadConnected() {
   return !!navigator.getGamepads?.().some((g) => g && g.connected);

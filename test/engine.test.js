@@ -7,7 +7,7 @@ const tempoMap = new TempoMap(192, [{ tick: 0, bpm: 120 }]);
 
 function makeNotes(specs) {
   return specs.map((s, id) => {
-    const lanes = s.open ? [] : s.lanes ?? [s.lane];
+    const lanes = s.open ? [] : (s.lanes ?? [s.lane]);
     const sustainSec = s.sustain ?? 0;
     return {
       id,
@@ -45,7 +45,13 @@ describe('tap mode', () => {
   });
 
   it('ignores presses with no note nearby but breaks streak on a wrong lane', () => {
-    const e = new GameEngine(makeNotes([{ time: 1, lane: 0 }, { time: 2, lane: 0 }]), { tempoMap });
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 2, lane: 0 },
+      ]),
+      { tempoMap },
+    );
     e.fretDown(0, 1);
     e.fretUp(0, 1.1);
     e.fretDown(3, 1.5); // nothing in window: no penalty
@@ -112,7 +118,13 @@ describe('tap mode', () => {
 
 describe('strum mode', () => {
   it('needs a strum with the right fret held; lower frets may be anchored', () => {
-    const e = new GameEngine(makeNotes([{ time: 1, lane: 3 }, { time: 2, lane: 1 }]), { tempoMap, mode: 'strum' });
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 3 },
+        { time: 2, lane: 1 },
+      ]),
+      { tempoMap, mode: 'strum' },
+    );
     e.fretDown(0, 0.9);
     e.fretDown(3, 0.95);
     e.strum(1);
@@ -124,7 +136,13 @@ describe('strum mode', () => {
   });
 
   it('counts a strum with nothing to hit as an overstrum', () => {
-    const e = new GameEngine(makeNotes([{ time: 1, lane: 0 }, { time: 3, lane: 0 }]), { tempoMap, mode: 'strum' });
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 3, lane: 0 },
+      ]),
+      { tempoMap, mode: 'strum' },
+    );
     e.fretDown(0, 0.9);
     e.strum(1);
     expect(e.streak).toBe(1);
@@ -133,10 +151,16 @@ describe('strum mode', () => {
   });
 
   it('allows HOPOs by fretting after a hit and forgives the strum that follows', () => {
-    const e = new GameEngine(makeNotes([{ time: 1, lane: 0 }, { time: 1.1, lane: 1, hopo: true }]), {
-      tempoMap,
-      mode: 'strum',
-    });
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.1, lane: 1, hopo: true },
+      ]),
+      {
+        tempoMap,
+        mode: 'strum',
+      },
+    );
     e.fretDown(0, 0.98);
     e.strum(1);
     e.fretDown(1, 1.1);
@@ -146,10 +170,16 @@ describe('strum mode', () => {
   });
 
   it('does not let a HOPO be fretted without a previous hit, but taps always can', () => {
-    const e = new GameEngine(makeNotes([{ time: 1, lane: 1, hopo: true }, { time: 2, lane: 2, tap: true }]), {
-      tempoMap,
-      mode: 'strum',
-    });
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 1, hopo: true },
+        { time: 2, lane: 2, tap: true },
+      ]),
+      {
+        tempoMap,
+        mode: 'strum',
+      },
+    );
     e.fretDown(1, 1);
     expect(e.state[0]).toBe(0);
     e.fretUp(1, 1.5);
@@ -159,7 +189,7 @@ describe('strum mode', () => {
 });
 
 describe('star power', () => {
-  const phrase = (sp, broken) =>
+  const phrase = () =>
     makeNotes([
       { time: 1, lane: 0, sp: 0 },
       { time: 2, lane: 0, sp: 0, spEnd: true },

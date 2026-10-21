@@ -8,7 +8,14 @@ import { resolveInputMode } from '../settings.js';
 import { isDrums } from '../chart/constants.js';
 
 const BASE_SPEED = 9; // world units per second at note speed 1.0
-const INSTRUMENT_STEM = { guitar: 'guitar', coop: 'guitar', bass: 'bass', rhythm: 'rhythm', keys: 'keys', drums: 'drums' };
+const INSTRUMENT_STEM = {
+  guitar: 'guitar',
+  coop: 'guitar',
+  bass: 'bass',
+  rhythm: 'rhythm',
+  keys: 'keys',
+  drums: 'drums',
+};
 
 export class GameSession {
   /**
@@ -21,11 +28,20 @@ export class GameSession {
    * @param {import('../render/highway.js').HighwayRenderer} opts.renderer
    * @param {import('../ui/hud.js').Hud} opts.hud
    * @param {HTMLElement} opts.surface element receiving touches
+   * @param {number} [opts.speed] playback rate, 1 = normal
+   * @param {{start: number, end: number}|null} [opts.range] section practice bounds in seconds
    * @param {(stats: object) => void} opts.onFinish
    * @param {() => void} opts.onPauseRequest
    */
   constructor(opts) {
-    Object.assign(this, opts);
+    this.chart = opts.chart;
+    this.stems = opts.stems;
+    this.settings = opts.settings;
+    this.renderer = opts.renderer;
+    this.hud = opts.hud;
+    this.surface = opts.surface;
+    this.onFinish = opts.onFinish;
+    this.onPauseRequest = opts.onPauseRequest;
     this.trackKey = `${opts.instrument}:${opts.difficulty}`;
     this.drums = isDrums(opts.instrument);
     this.notes = buildPlayableNotes(opts.chart.song, this.trackKey, {
@@ -35,10 +51,15 @@ export class GameSession {
     // Section practice: keep only the notes inside the range and renumber them.
     this.range = opts.range ?? null;
     if (this.range) {
-      this.notes = this.notes.filter((n) => n.time >= this.range.start && n.time < this.range.end).map((n, id) => ({ ...n, id }));
+      this.notes = this.notes
+        .filter((n) => n.time >= this.range.start && n.time < this.range.end)
+        .map((n, id) => ({ ...n, id }));
     }
     // A connected controller plays by strum rules even on a touch device.
-    this.mode = anyGamepadConnected() && opts.settings.inputMode === 'auto' ? 'strum' : resolveInputMode(opts.settings.inputMode);
+    this.mode =
+      anyGamepadConnected() && opts.settings.inputMode === 'auto'
+        ? 'strum'
+        : resolveInputMode(opts.settings.inputMode);
     this.speed = opts.speed ?? 1; // practice speed, 1 = normal
     this.audio = new AudioPlayer();
     this.audio.rate = this.speed;
@@ -138,7 +159,8 @@ export class GameSession {
     this.hud.update(this.engine, t, this.audio.duration);
 
     const outroDone = this.engine.isFinished(t) && t > this.lastNoteEnd + (this.range ? 1.5 : 4);
-    if (t > this.audio.duration + 0.5 || outroDone || (this.range && t > this.range.end + 1.5)) this.#finish();
+    if (t > this.audio.duration + 0.5 || outroDone || (this.range && t > this.range.end + 1.5))
+      this.#finish();
   }
 
   #handleEvent(ev) {

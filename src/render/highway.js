@@ -67,7 +67,8 @@ export class HighwayRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(BG_COLOR);
-    this.scene.fog = new THREE.Fog(BG_COLOR, 20, 45);
+    this.fog = new THREE.Fog(BG_COLOR, 20, 45);
+    this.scene.fog = this.fog;
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
     this.speed = 9; // world units per second of song time
     this.leftHanded = false;
@@ -105,7 +106,11 @@ export class HighwayRenderer {
     board.position.z = -HIGHWAY_LENGTH / 2 + 3;
     this.scene.add(board);
 
-    this.railMaterial = new THREE.MeshStandardMaterial({ color: 0x6b5cff, emissive: 0x3a2cff, emissiveIntensity: 0.6 });
+    this.railMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6b5cff,
+      emissive: 0x3a2cff,
+      emissiveIntensity: 0.6,
+    });
     for (const side of [-1, 1]) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, HIGHWAY_LENGTH), this.railMaterial);
       rail.position.set((side * HIGHWAY_WIDTH) / 2, 0.06, -HIGHWAY_LENGTH / 2 + 3);
@@ -150,7 +155,11 @@ export class HighwayRenderer {
         new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4 }),
       );
       ring.rotation.x = Math.PI / 2;
-      const padMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0 });
+      const padMat = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        emissive: color,
+        emissiveIntensity: 0,
+      });
       const pad = new THREE.Mesh(padGeo, padMat);
       group.add(ring, pad);
       group.position.set(this.laneX(lane), 0.06, 0);
@@ -166,7 +175,9 @@ export class HighwayRenderer {
       lane: this.colors.map((c) => std(c, { emissive: c, emissiveIntensity: 0.25 })),
       laneMissed: this.colors.map((c) => std(new THREE.Color(c).multiplyScalar(0.25))),
       open: std(this.openColor, { emissive: this.openColor, emissiveIntensity: 0.4 }),
-      tail: this.colors.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 })),
+      tail: this.colors.map(
+        (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 }),
+      ),
       tailOpen: new THREE.MeshBasicMaterial({ color: this.openColor, transparent: true, opacity: 0.6 }),
     });
   }
@@ -290,8 +301,8 @@ export class HighwayRenderer {
     }
     // Fade notes in near the far end of the visible highway.
     const far = cam.position.distanceTo(new THREE.Vector3(0, 0, -Math.min(HIGHWAY_LENGTH - 6, dist * 3.2)));
-    this.scene.fog.near = far * 0.55;
-    this.scene.fog.far = far;
+    this.fog.near = far * 0.55;
+    this.fog.far = far;
     this.lookahead = Math.min(HIGHWAY_LENGTH - 6, dist * 3.2) / this.speed; // seconds of notes to draw
   }
 
@@ -376,8 +387,15 @@ export class HighwayRenderer {
       for (const lane of n.lanes) {
         const g = this.gemPool.next();
         const { body, cap } = g.userData;
-        body.material = state === MISSED ? this.mat.laneMissed[lane] : isSp ? this.mat.sp : this.mat.lane[lane];
-        cap.material = n.cymbal ? this.mat.capCymbal : n.tap ? this.mat.capTap : n.hopo ? this.mat.capHopo : this.mat.capStrum;
+        body.material =
+          state === MISSED ? this.mat.laneMissed[lane] : isSp ? this.mat.sp : this.mat.lane[lane];
+        cap.material = n.cymbal
+          ? this.mat.capCymbal
+          : n.tap
+            ? this.mat.capTap
+            : n.hopo
+              ? this.mat.capHopo
+              : this.mat.capStrum;
         const scale = n.cymbal ? 1.15 : n.hopo || n.tap ? 0.82 : 1;
         g.scale.set(scale, n.cymbal ? 0.45 : n.tap ? 0.7 : 1, scale);
         g.position.set(this.laneX(this.#visualLane(lane)), 0.1, nz);
