@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#07060d" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <title>Fretline</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Main menu & song library -->
+      <section class="screen active" id="menu">
+        <header class="brand">
+          <h1>Fret<span>line</span></h1>
+          <p>3D rhythm guitar for your phone. Plays Clone Hero charts.</p>
+        </header>
+        <div class="menu-actions">
+          <button class="btn primary" data-action="play-demo">Play the demo song</button>
+          <label class="btn">
+            Add songs (.zip or song files)
+            <input type="file" id="fileInput" multiple hidden
+              accept=".zip,.chart,.mid,.midi,.ini,.ogg,.opus,.mp3,.wav,.m4a,.flac,.png,.jpg,.jpeg,.sng" />
+          </label>
+          <label class="btn subtle" id="folderButton">
+            Add a songs folder
+            <input type="file" id="folderInput" webkitdirectory multiple hidden />
+          </label>
+          <button class="btn subtle" data-action="settings">Settings</button>
+        </div>
+        <div class="library">
+          <div class="library-head">
+            <h2>Library</h2>
+            <input type="search" id="search" placeholder="Search songs" autocomplete="off" />
+          </div>
+          <ul id="songList" class="song-list"></ul>
+          <p id="emptyLibrary" class="muted">
+            No songs yet. Add a Clone Hero song as a .zip, or pick its files together
+            (notes.chart or notes.mid, song.ini and the audio such as song.ogg).
+          </p>
+        </div>
+      </section>
+
+      <!-- Song setup: instrument / difficulty -->
+      <section class="screen" id="setup">
+        <button class="back" data-action="back">‹ Library</button>
+        <div class="setup-song">
+          <div class="art" id="setupArt"></div>
+          <h2 id="setupName"></h2>
+          <p id="setupArtist" class="muted"></p>
+          <p id="setupCharter" class="muted small"></p>
+        </div>
+        <h3>Instrument</h3>
+        <div class="chips" id="instrumentChips"></div>
+        <h3>Difficulty</h3>
+        <div class="chips" id="difficultyChips"></div>
+        <button class="btn primary big" data-action="start">Play</button>
+        <button class="btn danger subtle" data-action="delete-song" id="deleteSong">Remove from library</button>
+      </section>
+
+      <!-- Settings -->
+      <section class="screen" id="settings">
+        <button class="back" data-action="back">‹ Back</button>
+        <h2>Settings</h2>
+        <label class="field">
+          <span>Note speed <output id="noteSpeedOut"></output></span>
+          <input type="range" id="noteSpeed" min="0.5" max="2.5" step="0.05" />
+        </label>
+        <label class="field">
+          <span>Audio calibration <output id="calibrationOut"></output></span>
+          <input type="range" id="calibration" min="-200" max="400" step="5" />
+          <small class="muted">Raise this if notes feel early (common with Bluetooth headphones).</small>
+        </label>
+        <button class="btn subtle" data-action="calibrate">Calibrate by tapping</button>
+        <label class="field">
+          <span>Hit window <output id="hitWindowOut"></output></span>
+          <input type="range" id="hitWindow" min="40" max="140" step="5" />
+        </label>
+        <label class="field">
+          <span>Volume <output id="volumeOut"></output></span>
+          <input type="range" id="volume" min="0" max="1" step="0.05" />
+        </label>
+        <label class="field">
+          <span>Controls</span>
+          <select id="inputMode">
+            <option value="auto">Automatic</option>
+            <option value="tap">Tap frets (touch)</option>
+            <option value="strum">Hold frets + strum (keyboard)</option>
+          </select>
+        </label>
+        <label class="toggle"><input type="checkbox" id="leftHanded" /> Left-handed (mirror lanes)</label>
+        <label class="toggle"><input type="checkbox" id="muteOnMiss" /> Mute the guitar on misses</label>
+      </section>
+
+      <!-- Calibration -->
+      <section class="screen" id="calibrate">
+        <button class="back" data-action="back">‹ Back</button>
+        <h2>Calibration</h2>
+        <p>Tap the big button in time with the clicks you hear. Use the headphones or speaker you play with.</p>
+        <button class="tap-pad" id="tapPad">Tap</button>
+        <p id="calibrateResult" class="muted"></p>
+      </section>
+
+      <!-- Gameplay -->
+      <section class="screen" id="game">
+        <canvas id="stage"></canvas>
+        <div id="touchSurface"></div>
+        <div class="hud">
+          <div class="hud-progress" data-hud="progress"></div>
+          <div class="hud-left">
+            <div class="hud-score" data-hud="score">0</div>
+            <div class="hud-streak" data-hud="streak"></div>
+          </div>
+          <div class="hud-right">
+            <div class="mult-ring" data-hud="mult-ring"><span data-hud="mult">1x</span></div>
+            <div class="sp-meter"><div data-hud="sp-fill" class="sp-fill"></div></div>
+          </div>
+          <button class="sp-button" data-hud="sp-button" aria-label="Activate star power">★</button>
+          <button class="pause-button" data-action="pause" aria-label="Pause">❚❚</button>
+          <div class="popup" data-hud="popup"></div>
+          <div class="hint" data-hud="hint"></div>
+        </div>
+        <div class="overlay" id="pauseMenu" hidden>
+          <div class="panel">
+            <h2>Paused</h2>
+            <button class="btn primary" data-action="resume">Resume</button>
+            <button class="btn" data-action="restart">Restart</button>
+            <button class="btn subtle" data-action="quit">Quit</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="screen" id="results">
+        <h2 id="resultsName"></h2>
+        <div class="stars" id="resultsStars"></div>
+        <div class="result-score" id="resultsScore"></div>
+        <dl class="result-stats" id="resultsStats"></dl>
+        <button class="btn primary" data-action="retry">Play again</button>
+        <button class="btn subtle" data-action="to-library">Library</button>
+      </section>
+
+      <div class="overlay" id="loading" hidden>
+        <div class="panel"><div class="spinner"></div><p id="loadingText">Loading…</p></div>
+      </div>
+      <div class="toast" id="toast" role="status"></div>
+      <div class="rotate-hint">Turn your phone upright to play.</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
