@@ -17,7 +17,11 @@ built-in generated demo song so it works out of the box.
 - **Song library** stored on the device (IndexedDB), so songs stay after reloading.
 - **Settings:** note speed, audio latency calibration (with a tap-along calibrator), hit window, volume,
   left-handed mode, controls mode.
-- Installable as a full-screen, portrait-locked home-screen app (web app manifest).
+- Installable as a full-screen, portrait-locked home-screen app, and playable offline after the first visit.
+- **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
+- **Practice speed** (50–100%) on the song screen; slowed runs aren't recorded.
+- **Controllers:** gamepads and guitar controllers via the Gamepad API (frets on buttons 1–5, strum on the d-pad
+  or stick, Star Power on Select, pause on Start). Untested on real guitar hardware; mapping isn't configurable yet.
 
 ## Adding songs
 
@@ -61,8 +65,8 @@ Actions**, then every push to `main` deploys.
 
 ## Known limitations
 
-- Not supported yet: drums, 6-fret (GHL) charts, `.sng` song containers, whammy, guitar controllers/gamepads,
-  practice mode, and online features.
+- Not supported yet: drums, 6-fret (GHL) charts, `.sng` song containers, whammy, controller remapping,
+  section-based practice, and online features.
 - Audio formats depend on the browser. Chrome and Firefox decode `.ogg`/`.opus`. Safari support for Ogg
   Vorbis/Opus varies by version. If a song won't load on an iPhone, try `.mp3` or `.m4a` audio.
 - Behaviour taken from community conventions rather than an official spec, which may differ slightly
