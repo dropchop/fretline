@@ -112,8 +112,16 @@ export class TouchControls {
 }
 
 const FRET_KEYS = {
-  Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4,
-  KeyA: 0, KeyS: 1, KeyD: 2, KeyF: 3, KeyG: 4,
+  Digit1: 0,
+  Digit2: 1,
+  Digit3: 2,
+  Digit4: 3,
+  Digit5: 4,
+  KeyA: 0,
+  KeyS: 1,
+  KeyD: 2,
+  KeyF: 3,
+  KeyG: 4,
 };
 const STRUM_KEYS = new Set(['Enter', 'Space', 'ArrowUp', 'ArrowDown']);
 const SP_KEYS = new Set(['ShiftLeft', 'ShiftRight', 'KeyQ']);

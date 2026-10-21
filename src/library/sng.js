@@ -42,6 +42,7 @@ export function parseSng(buffer) {
   const metadataLen = u64();
   const metadataEnd = pos + metadataLen;
   const metadataCount = u64();
+  /** @type {Record<string, string>} */
   const metadata = {};
   for (let i = 0; i < metadataCount; i++) {
     const key = str(i32());
@@ -61,10 +62,11 @@ export function parseSng(buffer) {
   }
   pos = fileMetaEnd;
 
+  /** @type {Record<string, Uint8Array>} */
   const files = {};
   for (const { name, length, offset } of index) {
     if (offset + length > bytes.length) throw new Error(`.sng file entry "${name}" is truncated`);
-    const data = bytes.slice(offset, offset + length);
+    const data = new Uint8Array(bytes.slice(offset, offset + length));
     for (let i = 0; i < data.length; i++) data[i] ^= xorMask[i % 16] ^ (i & 0xff);
     files[name] = data;
   }

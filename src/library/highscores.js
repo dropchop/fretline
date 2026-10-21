@@ -20,7 +20,8 @@ export function getHighScore(songId, instrument, difficulty) {
 export function getBestForSong(songId) {
   let best = null;
   for (const [k, v] of Object.entries(readAll())) {
-    if (k.startsWith(`${songId}::`) && (!best || v.score > best.score)) best = { ...v, track: k.split('::')[1] };
+    if (k.startsWith(`${songId}::`) && (!best || v.score > best.score))
+      best = { ...v, track: k.split('::')[1] };
   }
   return best;
 }
@@ -31,7 +32,13 @@ export function submitScore(songId, instrument, difficulty, stats) {
   const k = key(songId, instrument, difficulty);
   const prev = all[k];
   if (prev && prev.score >= stats.score) return false;
-  all[k] = { score: stats.score, stars: stats.stars, accuracy: stats.accuracy, fullCombo: stats.fullCombo, at: Date.now() };
+  all[k] = {
+    score: stats.score,
+    stars: stats.stars,
+    accuracy: stats.accuracy,
+    fullCombo: stats.fullCombo,
+    at: Date.now(),
+  };
   try {
     localStorage.setItem(KEY, JSON.stringify(all));
   } catch {

@@ -41,7 +41,15 @@ export function buildPlayableNotes(song, trackKey, options = {}) {
   for (const raw of track.notes) {
     let g = groups[groups.length - 1];
     if (drums || !g || g.tick !== raw.tick) {
-      g = { tick: raw.tick, lanes: new Set(), open: false, length: 0, force: null, tap: false, cymbal: !!raw.cymbal };
+      g = {
+        tick: raw.tick,
+        lanes: new Set(),
+        open: false,
+        length: 0,
+        force: null,
+        tap: false,
+        cymbal: !!raw.cymbal,
+      };
       groups.push(g);
     }
     if (raw.lane === OPEN_LANE) g.open = true;

@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
     <meta name="theme-color" content="#07060d" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -24,13 +27,23 @@
           <button class="btn primary" data-action="play-demo">Play the demo song</button>
           <label class="btn">
             Add songs (.zip or song files)
-            <input type="file" id="fileInput" multiple hidden
-              accept=".zip,.chart,.mid,.midi,.ini,.ogg,.opus,.mp3,.wav,.m4a,.flac,.png,.jpg,.jpeg,.sng" />
+            <input
+              type="file"
+              id="fileInput"
+              multiple
+              hidden
+              accept=".zip,.chart,.mid,.midi,.ini,.ogg,.opus,.mp3,.wav,.m4a,.flac,.png,.jpg,.jpeg,.sng"
+            />
           </label>
           <label class="btn subtle" id="folderButton">
             Add a songs folder
             <input type="file" id="folderInput" webkitdirectory multiple hidden />
           </label>
+          <label class="btn subtle">
+            Auto-chart any audio file
+            <input type="file" id="audioInput" accept="audio/*,.ogg,.opus,.mp3,.wav,.m4a,.flac" hidden />
+          </label>
+          <button class="btn subtle" data-action="profile">Profile &amp; history</button>
           <button class="btn subtle" data-action="settings">Settings</button>
         </div>
         <div class="library">
@@ -40,8 +53,8 @@
           </div>
           <ul id="songList" class="song-list"></ul>
           <p id="emptyLibrary" class="muted">
-            No songs yet. Add a Clone Hero song as a .zip, or pick its files together
-            (notes.chart or notes.mid, song.ini and the audio such as song.ogg).
+            No songs yet. Add a Clone Hero song as a .zip, or pick its files together (notes.chart or
+            notes.mid, song.ini and the audio such as song.ogg).
           </p>
         </div>
       </section>
@@ -62,15 +75,22 @@
         <p class="best" id="setupBest"></p>
         <label class="field" id="sectionField">
           <span>Practice section</span>
-          <select id="section"><option value="">Whole song</option></select>
+          <select id="section">
+            <option value="">Whole song</option>
+          </select>
         </label>
         <label class="field">
           <span>Practice speed <output id="speedOut">100%</output></span>
           <input type="range" id="speed" min="50" max="100" step="5" value="100" />
           <small class="muted">Below 100% the song plays slower and scores don't count as records.</small>
         </label>
+        <label class="toggle"
+          ><input type="checkbox" id="versus" /> Pass &amp; play: two players take turns</label
+        >
         <button class="btn primary big" data-action="start">Play</button>
-        <button class="btn danger subtle" data-action="delete-song" id="deleteSong">Remove from library</button>
+        <button class="btn danger subtle" data-action="delete-song" id="deleteSong">
+          Remove from library
+        </button>
       </section>
 
       <!-- Settings -->
@@ -103,16 +123,38 @@
             <option value="strum">Hold frets + strum (keyboard)</option>
           </select>
         </label>
+        <label class="field">
+          <span>Highway theme</span>
+          <select id="theme"></select>
+        </label>
+        <label class="toggle"
+          ><input type="checkbox" id="tiltStarPower" /> Flick the phone to activate Star Power</label
+        >
         <button class="btn subtle" data-action="map-controller">Set up controller buttons</button>
         <label class="toggle"><input type="checkbox" id="leftHanded" /> Left-handed (mirror lanes)</label>
         <label class="toggle"><input type="checkbox" id="muteOnMiss" /> Mute the guitar on misses</label>
+      </section>
+
+      <!-- Profile -->
+      <section class="screen" id="profile">
+        <button class="back" data-action="back">‹ Back</button>
+        <h2>Profile</h2>
+        <dl class="result-stats" id="profileStats"></dl>
+        <h3>Accuracy, recent plays</h3>
+        <div id="profileSpark"></div>
+        <h3>Recent plays</h3>
+        <ul class="history" id="profileHistory"></ul>
+        <p class="muted" id="profileEmpty">No plays yet. Finish a song to start your history.</p>
+        <button class="btn danger subtle" data-action="clear-history">Clear history</button>
       </section>
 
       <!-- Controller mapping -->
       <section class="screen" id="controller">
         <button class="back" data-action="back">‹ Back</button>
         <h2>Controller</h2>
-        <p id="controllerStatus" class="muted">Connect a gamepad or guitar controller and press any button.</p>
+        <p id="controllerStatus" class="muted">
+          Connect a gamepad or guitar controller and press any button.
+        </p>
         <p id="controllerPrompt" class="map-prompt"></p>
         <p id="controllerMap" class="muted small"></p>
         <button class="btn subtle" data-action="reset-controller">Use default layout</button>
@@ -122,7 +164,9 @@
       <section class="screen" id="calibrate">
         <button class="back" data-action="back">‹ Back</button>
         <h2>Calibration</h2>
-        <p>Tap the big button in time with the clicks you hear. Use the headphones or speaker you play with.</p>
+        <p>
+          Tap the big button in time with the clicks you hear. Use the headphones or speaker you play with.
+        </p>
         <button class="tap-pad" id="tapPad">Tap</button>
         <p id="calibrateResult" class="muted"></p>
       </section>
@@ -136,6 +180,7 @@
           <div class="hud-left">
             <div class="hud-score" data-hud="score">0</div>
             <div class="hud-streak" data-hud="streak"></div>
+            <div class="judge" data-hud="judge"></div>
           </div>
           <div class="hud-right">
             <div class="mult-ring" data-hud="mult-ring"><span data-hud="mult">1x</span></div>
@@ -158,17 +203,24 @@
 
       <!-- Results -->
       <section class="screen" id="results">
+        <p class="versus-banner" id="resultsPlayer"></p>
         <h2 id="resultsName"></h2>
         <div class="stars" id="resultsStars"></div>
         <div class="result-score" id="resultsScore"></div>
         <p class="best" id="resultsBest"></p>
         <dl class="result-stats" id="resultsStats"></dl>
-        <button class="btn primary" data-action="retry">Play again</button>
+        <div class="timing" id="resultsTiming"></div>
+        <p class="muted small" id="resultsTimingNote"></p>
+        <button class="btn primary" data-action="next-player" id="nextPlayer" hidden>Player 2's turn</button>
+        <button class="btn primary" data-action="retry" id="retryButton">Play again</button>
         <button class="btn subtle" data-action="to-library">Library</button>
       </section>
 
       <div class="overlay" id="loading" hidden>
-        <div class="panel"><div class="spinner"></div><p id="loadingText">Loading…</p></div>
+        <div class="panel">
+          <div class="spinner"></div>
+          <p id="loadingText">Loading…</p>
+        </div>
       </div>
       <div class="toast" id="toast" role="status"></div>
       <div class="rotate-hint">Turn your phone upright to play.</div>

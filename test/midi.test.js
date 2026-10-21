@@ -4,9 +4,11 @@ import { parseMid } from '../src/chart/midiFile.js';
 import { buildPlayableNotes } from '../src/chart/playable.js';
 
 // Builds a delta-timed track from absolute-tick events.
+/** @returns {any[]} */
 function track(name, events) {
   const sorted = [...events].sort((a, b) => a.tick - b.tick);
   let last = 0;
+  /** @type {any[]} */
   const out = [{ deltaTime: 0, meta: true, type: 'trackName', text: name }];
   for (const { tick, ...ev } of sorted) {
     out.push({ deltaTime: tick - last, ...ev });
@@ -26,7 +28,15 @@ function note(noteNumber, tick, length) {
 function buildMidi() {
   const tempo = track('tempo', [
     { tick: 0, meta: true, type: 'setTempo', microsecondsPerBeat: 500000 },
-    { tick: 0, meta: true, type: 'timeSignature', numerator: 4, denominator: 4, metronome: 24, thirtyseconds: 8 },
+    {
+      tick: 0,
+      meta: true,
+      type: 'timeSignature',
+      numerator: 4,
+      denominator: 4,
+      metronome: 24,
+      thirtyseconds: 8,
+    },
   ]);
   const events = track('EVENTS', [{ tick: 0, meta: true, type: 'text', text: '[section intro]' }]);
   const guitar = track('PART GUITAR', [
@@ -42,7 +52,10 @@ function buildMidi() {
     ...note(104, 1920, 10), // tap marker
     ...note(99, 1920, 60), // expert blue (tapped)
   ]);
-  const data = writeMidi({ header: { format: 1, numTracks: 3, ticksPerBeat: 480 }, tracks: [tempo, events, guitar] });
+  const data = writeMidi({
+    header: { format: 1, numTracks: 3, ticksPerBeat: 480 },
+    tracks: [tempo, events, guitar],
+  });
   return new Uint8Array(data);
 }
 

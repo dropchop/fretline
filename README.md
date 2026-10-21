@@ -21,6 +21,13 @@ built-in generated demo song so it works out of the box.
 - **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
 - **Practice mode:** pick a section of the song and/or slow it down (50–100%). Practice runs aren't recorded.
 - **Drums:** 4-pad + kick drum charts from `.chart` and `.mid` (cymbals shown flat), with touch pads, Space / strum = kick.
+- **Auto-chart any audio file:** pick an MP3/OGG/etc. and the game detects the tempo and hits (spectral-flux onsets,
+  grid-fitted beats) and writes a four-difficulty chart. Results depend on how clear the beat is.
+- **Timing feedback:** Early / Perfect / Late on every hit, a timing histogram and advice on the results screen.
+- **Profile & history:** lifetime totals, an accuracy sparkline and recent plays.
+- **Pass & play versus:** two players take turns on one phone; the results screen names the winner.
+- **Tilt Star Power:** flick the phone to activate Star Power (DeviceOrientation; iOS asks for motion access).
+- **Highway themes:** Classic, Neon, Sunset, Monochrome.
 - **Controllers:** gamepads and guitar controllers via the Gamepad API, with a button-mapping screen in Settings.
   Default layout: frets on buttons 0–4, strum on the d-pad or stick, Star Power on Select, pause on Start.
   Untested on real guitar hardware.
@@ -39,31 +46,48 @@ Fretline doesn't include any commercial songs. Use charts you have the right to 
 
 ```sh
 npm install
-npm run dev      # local dev server (also on your LAN: open the printed Network URL on your phone)
-npm test         # unit tests for the chart parsers and gameplay engine
-npm run build    # production build in dist/
+npm run dev        # local dev server (also on your LAN: open the printed Network URL on your phone)
+npm run check      # typecheck + lint + format check + unit tests
+npm test           # unit tests for the chart parsers and gameplay engine
+npm run test:e2e   # browser smoke test: builds, serves and plays the game in headless Chromium
+npm run build      # production build in dist/
 ```
 
 Requires Node 22. The `.npmrc` sets `legacy-peer-deps` to work around an npm resolver error with
-Vitest's optional peer dependencies.
+Vitest's optional peer dependencies. `test:e2e` needs Playwright's Chromium (`npx playwright install chromium`).
+
+The code is plain JavaScript with JSDoc types, checked by `tsc` (`npm run typecheck`); ESLint and Prettier
+enforce style. CI runs all of it plus the browser smoke test.
 
 To play on a phone, the page must be served over **HTTPS** (or localhost) for some features such as
 installing to the home screen and the screen wake lock. The included GitHub Pages workflow
 (`.github/workflows/pages.yml`) handles that: enable it once in **Settings → Pages → Source: GitHub
 Actions**, then every push to `main` deploys.
 
+## Single-file build
+
+```sh
+npm run build:single   # writes dist/fretline.html
+```
+
+`dist/fretline.html` is the whole game in one self-contained HTML file (about 700 kB, mostly Three.js):
+no server needed, it works opened straight from disk, by email or from a USB stick, and songs you import
+are still saved in the browser. What it drops compared with the hosted version: the web-app manifest
+(no "install to home screen") and the service worker (not needed, it's already local). On iPhone, the
+Files app previews HTML without running scripts, so open the file in Safari via a server or host it.
+
 ## Project layout
 
-| Path | What it does |
-| --- | --- |
-| `src/chart/` | `.chart`, `.mid` and `song.ini` parsers, tempo map, conversion into timed notes (chords, HOPOs, Star Power) |
-| `src/game/engine.js` | Gameplay rules: hit/miss judging, scoring, streak, multiplier, sustains, Star Power |
-| `src/game/session.js` | One play-through: connects audio clock, engine, renderer, HUD and controls |
-| `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting |
-| `src/audio/player.js` | Multi-stem Web Audio playback; latency-corrected song clock |
-| `src/input/controls.js` | Multi-touch and keyboard input |
-| `src/library/` | Importing folders/zips/.sng, high scores, and storing songs in IndexedDB |
-| `src/demo/demoSong.js` | Generated demo chart and synthesized audio |
+| Path                    | What it does                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `src/chart/`            | `.chart`, `.mid` and `song.ini` parsers, tempo map, conversion into timed notes (chords, HOPOs, Star Power) |
+| `src/game/engine.js`    | Gameplay rules: hit/miss judging, scoring, streak, multiplier, sustains, Star Power                         |
+| `src/game/session.js`   | One play-through: connects audio clock, engine, renderer, HUD and controls                                  |
+| `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting                                 |
+| `src/audio/player.js`   | Multi-stem Web Audio playback; latency-corrected song clock                                                 |
+| `src/input/controls.js` | Multi-touch and keyboard input                                                                              |
+| `src/library/`          | Importing folders/zips/.sng, high scores, and storing songs in IndexedDB                                    |
+| `src/demo/demoSong.js`  | Generated demo chart and synthesized audio                                                                  |
 
 ## Known limitations
 

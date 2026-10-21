@@ -6,6 +6,42 @@ export const LANE_COLORS = [0x22d34a, 0xff3b3b, 0xffd51f, 0x2f8cff, 0xff8a1f];
 export const DRUM_COLORS = [0xff3b3b, 0xffd51f, 0x2f8cff, 0x22d34a];
 const OPEN_COLOR = 0xb44dff;
 const KICK_COLOR = 0xff8a1f;
+
+/** Highway colour themes, selectable in Settings. */
+export const THEMES = {
+  classic: {
+    label: 'Classic',
+    lanes: LANE_COLORS,
+    drums: DRUM_COLORS,
+    open: OPEN_COLOR,
+    kick: KICK_COLOR,
+    rail: 0x6b5cff,
+  },
+  neon: {
+    label: 'Neon',
+    lanes: [0x39ff14, 0xff2079, 0xfff01f, 0x00e5ff, 0xff8c00],
+    drums: [0xff2079, 0xfff01f, 0x00e5ff, 0x39ff14],
+    open: 0xd400ff,
+    kick: 0xff8c00,
+    rail: 0x00e5ff,
+  },
+  sunset: {
+    label: 'Sunset',
+    lanes: [0xf4d35e, 0xee964b, 0xf95738, 0xc44536, 0x772e25],
+    drums: [0xf95738, 0xf4d35e, 0xee964b, 0xc44536],
+    open: 0xff7bac,
+    kick: 0xf4d35e,
+    rail: 0xee964b,
+  },
+  mono: {
+    label: 'Monochrome',
+    lanes: [0xffffff, 0xd0d0d0, 0xa0a0a0, 0x707070, 0x505050],
+    drums: [0xffffff, 0xc0c0c0, 0x909090, 0x606060],
+    open: 0xffffff,
+    kick: 0xffffff,
+    rail: 0xaaaaaa,
+  },
+};
 const SP_COLOR = 0x8ff6ff;
 const BG_COLOR = 0x07060d;
 
@@ -67,7 +103,8 @@ export class HighwayRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(BG_COLOR);
-    this.scene.fog = new THREE.Fog(BG_COLOR, 20, 45);
+    this.fog = new THREE.Fog(BG_COLOR, 20, 45);
+    this.scene.fog = this.fog;
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
     this.speed = 9; // world units per second of song time
     this.leftHanded = false;
@@ -105,7 +142,11 @@ export class HighwayRenderer {
     board.position.z = -HIGHWAY_LENGTH / 2 + 3;
     this.scene.add(board);
 
-    this.railMaterial = new THREE.MeshStandardMaterial({ color: 0x6b5cff, emissive: 0x3a2cff, emissiveIntensity: 0.6 });
+    this.railMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6b5cff,
+      emissive: 0x3a2cff,
+      emissiveIntensity: 0.6,
+    });
     for (const side of [-1, 1]) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, HIGHWAY_LENGTH), this.railMaterial);
       rail.position.set((side * HIGHWAY_WIDTH) / 2, 0.06, -HIGHWAY_LENGTH / 2 + 3);
@@ -118,11 +159,13 @@ export class HighwayRenderer {
   }
 
   /** Sets up frets, colours and effects for an instrument ('guitar'-style 5 lanes or 'drums'). */
-  configureLanes(instrument) {
+  configureLanes(instrument, themeName = 'classic') {
+    const theme = THEMES[themeName] ?? THEMES.classic;
     const drums = instrument === 'drums';
     this.laneCount = drums ? 4 : 5;
-    this.colors = drums ? DRUM_COLORS : LANE_COLORS;
-    this.openColor = drums ? KICK_COLOR : OPEN_COLOR;
+    this.colors = drums ? theme.drums : theme.lanes;
+    this.openColor = drums ? theme.kick : theme.open;
+    this.railColor = theme.rail;
     this.#buildStrikeline();
     this.#buildLaneMaterials();
     this.#buildFlashes();
@@ -150,7 +193,11 @@ export class HighwayRenderer {
         new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4 }),
       );
       ring.rotation.x = Math.PI / 2;
-      const padMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0 });
+      const padMat = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        emissive: color,
+        emissiveIntensity: 0,
+      });
       const pad = new THREE.Mesh(padGeo, padMat);
       group.add(ring, pad);
       group.position.set(this.laneX(lane), 0.06, 0);
@@ -166,7 +213,9 @@ export class HighwayRenderer {
       lane: this.colors.map((c) => std(c, { emissive: c, emissiveIntensity: 0.25 })),
       laneMissed: this.colors.map((c) => std(new THREE.Color(c).multiplyScalar(0.25))),
       open: std(this.openColor, { emissive: this.openColor, emissiveIntensity: 0.4 }),
-      tail: this.colors.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 })),
+      tail: this.colors.map(
+        (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 }),
+      ),
       tailOpen: new THREE.MeshBasicMaterial({ color: this.openColor, transparent: true, opacity: 0.6 }),
     });
   }
@@ -290,8 +339,8 @@ export class HighwayRenderer {
     }
     // Fade notes in near the far end of the visible highway.
     const far = cam.position.distanceTo(new THREE.Vector3(0, 0, -Math.min(HIGHWAY_LENGTH - 6, dist * 3.2)));
-    this.scene.fog.near = far * 0.55;
-    this.scene.fog.far = far;
+    this.fog.near = far * 0.55;
+    this.fog.far = far;
     this.lookahead = Math.min(HIGHWAY_LENGTH - 6, dist * 3.2) / this.speed; // seconds of notes to draw
   }
 
@@ -376,8 +425,15 @@ export class HighwayRenderer {
       for (const lane of n.lanes) {
         const g = this.gemPool.next();
         const { body, cap } = g.userData;
-        body.material = state === MISSED ? this.mat.laneMissed[lane] : isSp ? this.mat.sp : this.mat.lane[lane];
-        cap.material = n.cymbal ? this.mat.capCymbal : n.tap ? this.mat.capTap : n.hopo ? this.mat.capHopo : this.mat.capStrum;
+        body.material =
+          state === MISSED ? this.mat.laneMissed[lane] : isSp ? this.mat.sp : this.mat.lane[lane];
+        cap.material = n.cymbal
+          ? this.mat.capCymbal
+          : n.tap
+            ? this.mat.capTap
+            : n.hopo
+              ? this.mat.capHopo
+              : this.mat.capStrum;
         const scale = n.cymbal ? 1.15 : n.hopo || n.tap ? 0.82 : 1;
         g.scale.set(scale, n.cymbal ? 0.45 : n.tap ? 0.7 : 1, scale);
         g.position.set(this.laneX(this.#visualLane(lane)), 0.1, nz);
@@ -439,7 +495,7 @@ export class HighwayRenderer {
       m.scale.set(size, lane ? size : 1.2 + k, 1);
     }
     this.glowTime += dt;
-    const target = spActive ? SP_COLOR : 0x6b5cff;
+    const target = spActive ? SP_COLOR : (this.railColor ?? 0x6b5cff);
     this.railMaterial.color.lerp(new THREE.Color(target), Math.min(1, dt * 6));
     this.railMaterial.emissive.copy(this.railMaterial.color);
     this.railMaterial.emissiveIntensity = spActive ? 0.8 + 0.4 * Math.sin(this.glowTime * 8) : 0.5;

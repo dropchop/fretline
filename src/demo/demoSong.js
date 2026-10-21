@@ -19,7 +19,8 @@ function composeExpert() {
   const sp = [];
   let tick = 4 * Q; // one bar count-in
   const add = (lanes, len = 0, extra = {}) => {
-    for (const lane of [].concat(lanes)) notes.push({ tick, lane, length: len, force: null, tap: false, ...extra });
+    for (const lane of [].concat(lanes))
+      notes.push({ tick, lane, length: len, force: null, tap: false, ...extra });
   };
 
   // A: quarter-note melody.
@@ -42,7 +43,16 @@ function composeExpert() {
   }
   // C: power chords and sustains.
   sp.push({ tick, length: 8 * Q });
-  const chords = [[0, 1], [1, 2], [2, 3], [1, 3], [0, 2], [2, 4], [1, 3], [0, 1, 2]];
+  const chords = [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [1, 3],
+    [0, 2],
+    [2, 4],
+    [1, 3],
+    [0, 1, 2],
+  ];
   for (const chord of chords) {
     add(chord, Q + E);
     tick += 2 * Q;
@@ -102,7 +112,8 @@ function reduce(notes, difficulty) {
 /** Drum part: kick on the beat, snare on 2 and 4, hi-hat eighths, a crash to open each phrase. */
 function composeDrums(endTick, difficulty) {
   const notes = [];
-  const add = (tick, lane, cymbal = false) => notes.push({ tick, lane, length: 0, force: null, tap: false, cymbal });
+  const add = (tick, lane, cymbal = false) =>
+    notes.push({ tick, lane, length: 0, force: null, tap: false, cymbal });
   const dense = difficulty === 'expert' || difficulty === 'hard';
   for (let tick = 4 * Q; tick < endTick - 4 * Q; tick += Q) {
     const beat = (tick / Q) % 4;
@@ -121,8 +132,10 @@ export function buildDemoSong() {
   const { notes, sp, endTick } = composeExpert();
   const tempoMap = new TempoMap(RES, [{ tick: 0, bpm: BPM }], [{ tick: 0, numerator: 4, denominator: 4 }]);
   const tracks = { 'guitar:expert': { notes, starPower: sp, solos: [] } };
-  for (const d of ['easy', 'medium', 'hard']) tracks[`guitar:${d}`] = { notes: reduce(notes, d), starPower: sp, solos: [] };
-  for (const d of ['easy', 'medium', 'hard', 'expert']) tracks[`drums:${d}`] = { notes: composeDrums(endTick, d), starPower: sp, solos: [] };
+  for (const d of ['easy', 'medium', 'hard'])
+    tracks[`guitar:${d}`] = { notes: reduce(notes, d), starPower: sp, solos: [] };
+  for (const d of ['easy', 'medium', 'hard', 'expert'])
+    tracks[`drums:${d}`] = { notes: composeDrums(endTick, d), starPower: sp, solos: [] };
   return {
     song: {
       format: 'demo',
@@ -138,7 +151,12 @@ export function buildDemoSong() {
       tracks,
       hopoThresholdTicks: (RES * 65) / 192,
     },
-    meta: { name: 'Neon Highway (Demo)', artist: 'Fretline', charter: 'Generated', lengthMs: tempoMap.tickToTime(endTick) * 1000 },
+    meta: {
+      name: 'Neon Highway (Demo)',
+      artist: 'Fretline',
+      charter: 'Generated',
+      lengthMs: tempoMap.tickToTime(endTick) * 1000,
+    },
     offsetMs: 0,
     endTime: tempoMap.tickToTime(endTick),
     expertNotes: notes,
@@ -194,7 +212,8 @@ export async function renderDemoAudio(demo, sampleRate = 44100) {
   const data = noise.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
 
-  const hit = (time, { freq, decay, type = 'noise', gain = 1, hp = 0 }) => {
+  /** @type {(time: number, opts: {freq?: number, decay: number, type?: 'noise'|'osc', gain?: number, hp?: number}) => void} */
+  const hit = (time, { freq = 0, decay, type = 'noise', gain = 1, hp = 0 }) => {
     const env = bandCtx.createGain();
     env.gain.setValueAtTime(gain, time);
     env.gain.exponentialRampToValueAtTime(0.001, time + decay);
@@ -207,6 +226,7 @@ export async function renderDemoAudio(demo, sampleRate = 44100) {
       src.frequency.setValueAtTime(freq, time);
       src.frequency.exponentialRampToValueAtTime(40, time + decay);
     }
+    /** @type {AudioNode} */
     let node = src;
     if (hp) {
       const f = bandCtx.createBiquadFilter();

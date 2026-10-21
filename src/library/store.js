@@ -42,7 +42,9 @@ export function deleteSong(id) {
 /** @returns {Promise<import('./loader.js').SongPackage[]>} */
 export async function listSongs() {
   const all = (await run('readonly', (s) => s.getAll())) ?? [];
-  return all.sort((a, b) => a.meta.artist.localeCompare(b.meta.artist) || a.meta.name.localeCompare(b.meta.name));
+  return all.sort(
+    (a, b) => a.meta.artist.localeCompare(b.meta.artist) || a.meta.name.localeCompare(b.meta.name),
+  );
 }
 
 /** Ask the browser not to evict stored songs under storage pressure (best effort). */

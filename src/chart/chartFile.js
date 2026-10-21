@@ -60,7 +60,7 @@ function parseEventLine(line) {
  * @returns {import('./constants.js').ParsedSong}
  */
 export function parseChart(text) {
-  const sections = splitSections(text.replace(/^﻿/, ''));
+  const sections = splitSections(text.replace(/^\uFEFF/, ''));
   if (!sections.Song) throw new Error('Not a valid .chart file: missing [Song] section');
 
   const meta = {};
@@ -91,6 +91,7 @@ export function parseChart(text) {
     if (m) sectionMarkers.push({ tick: ev.tick, name: m[1].replace(/_/g, ' ') });
   }
 
+  /** @type {Record<string, import('./constants.js').ParsedTrack>} */
   const tracks = {};
   for (const [name, lines] of Object.entries(sections)) {
     const m = name.match(/^(Easy|Medium|Hard|Expert)(\w+)$/);
@@ -135,7 +136,8 @@ function parseDrumTrack(lines) {
     if (ev.type === 'N') {
       const fret = Number(ev.args[0]);
       if (fret === 0) gems.push({ tick: ev.tick, lane: OPEN_LANE, length: 0, force: null, tap: false });
-      else if (fret >= 1 && fret <= 4) gems.push({ tick: ev.tick, lane: fret - 1, length: 0, force: null, tap: false });
+      else if (fret >= 1 && fret <= 4)
+        gems.push({ tick: ev.tick, lane: fret - 1, length: 0, force: null, tap: false });
       else if (fret >= 66 && fret <= 68) cymbals.add(`${ev.tick}:${fret - 65}`);
     } else if (ev.type === 'S' && Number(ev.args[0]) === 2) {
       starPower.push({ tick: ev.tick, length: Number(ev.args[1]) || 0 });
@@ -176,7 +178,7 @@ function parseTrack(lines) {
   }
   const notes = gems.map((g) => ({
     ...g,
-    force: forced.has(g.tick) ? 'toggle' : null,
+    force: /** @type {'toggle'|null} */ (forced.has(g.tick) ? 'toggle' : null),
     tap: tap.has(g.tick),
   }));
   notes.sort((a, b) => a.tick - b.tick || a.lane - b.lane);

@@ -3,7 +3,12 @@
 const CACHE = 'fretline-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html'])).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => c.addAll(['./', './index.html']))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -23,7 +28,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     isAsset
       ? caches.match(req).then((hit) => hit || fetchAndCache(req))
-      : fetchAndCache(req).catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html'))),
+      : fetchAndCache(req).catch(() =>
+          caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html')),
+        ),
   );
 });
 

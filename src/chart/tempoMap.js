@@ -96,6 +96,6 @@ export class TempoMap {
     }
     const beatTicks = (this.resolution * 4) / ts.denominator;
     const measureTicks = beatTicks * ts.numerator;
-    return Math.abs(((tick - ts.tick) % measureTicks)) < 1e-6;
+    return Math.abs((tick - ts.tick) % measureTicks) < 1e-6;
   }
 }
