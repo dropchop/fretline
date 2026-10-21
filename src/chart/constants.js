@@ -6,7 +6,11 @@ export const INSTRUMENTS = {
   rhythm: 'Rhythm',
   coop: 'Guitar Co-op',
   keys: 'Keys',
+  drums: 'Drums',
 };
+
+/** Instruments whose notes are hit one pad at a time rather than as fretted chords. */
+export const isDrums = (instrument) => instrument === 'drums';
 
 /** Lane index used for open notes (no fret). */
 export const OPEN_LANE = 7;
@@ -19,6 +23,7 @@ export const OPEN_LANE = 7;
  * @property {'toggle'|'hopo'|'strum'|null} force
  *   'toggle' flips the natural HOPO state (.chart), 'hopo'/'strum' force it (.mid)
  * @property {boolean} tap
+ * @property {boolean} [cymbal] drums: pad is a cymbal (yellow/blue/green)
  *
  * @typedef {object} ParsedTrack
  * @property {RawNote[]} notes

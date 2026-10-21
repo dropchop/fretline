@@ -19,15 +19,17 @@ built-in generated demo song so it works out of the box.
   left-handed mode, controls mode.
 - Installable as a full-screen, portrait-locked home-screen app, and playable offline after the first visit.
 - **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
-- **Practice speed** (50–100%) on the song screen; slowed runs aren't recorded.
-- **Controllers:** gamepads and guitar controllers via the Gamepad API (frets on buttons 1–5, strum on the d-pad
-  or stick, Star Power on Select, pause on Start). Untested on real guitar hardware; mapping isn't configurable yet.
+- **Practice mode:** pick a section of the song and/or slow it down (50–100%). Practice runs aren't recorded.
+- **Drums:** 4-pad + kick drum charts from `.chart` and `.mid` (cymbals shown flat), with touch pads, Space / strum = kick.
+- **Controllers:** gamepads and guitar controllers via the Gamepad API, with a button-mapping screen in Settings.
+  Default layout: frets on buttons 0–4, strum on the d-pad or stick, Star Power on Select, pause on Start.
+  Untested on real guitar hardware.
 
 ## Adding songs
 
 Fretline doesn't include any commercial songs. Use charts you have the right to use.
 
-- **A `.zip`** containing one or more song folders: best on phones. Each folder needs `notes.chart` or
+- **A `.sng` file** (Clone Hero's single-file song format) or **a `.zip`** containing one or more song folders: best on phones. Each folder needs `notes.chart` or
   `notes.mid`, the audio (`song.ogg`, `guitar.ogg`, … in `.ogg`, `.opus`, `.mp3`, `.wav`, `.m4a`), and optionally
   `song.ini` and `album.png`/`album.jpg`.
 - **Loose files** of a single song, selected together.
@@ -60,13 +62,13 @@ Actions**, then every push to `main` deploys.
 | `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting |
 | `src/audio/player.js` | Multi-stem Web Audio playback; latency-corrected song clock |
 | `src/input/controls.js` | Multi-touch and keyboard input |
-| `src/library/` | Importing folders/zips and storing songs in IndexedDB |
+| `src/library/` | Importing folders/zips/.sng, high scores, and storing songs in IndexedDB |
 | `src/demo/demoSong.js` | Generated demo chart and synthesized audio |
 
 ## Known limitations
 
-- Not supported yet: drums, 6-fret (GHL) charts, `.sng` song containers, whammy, controller remapping,
-  section-based practice, and online features.
+- Not supported yet: 6-fret (GHL) charts, pro-drum scoring (cymbal vs tom isn't judged, only drawn), 2x kick,
+  whammy, and online features.
 - Audio formats depend on the browser. Chrome and Firefox decode `.ogg`/`.opus`. Safari support for Ogg
   Vorbis/Opus varies by version. If a song won't load on an iPhone, try `.mp3` or `.m4a` audio.
 - Behaviour taken from community conventions rather than an official spec, which may differ slightly

@@ -10,7 +10,10 @@ const MIDI_INSTRUMENTS = {
   'PART BASS': 'bass',
   'PART RHYTHM': 'rhythm',
   'PART KEYS': 'keys',
+  'PART DRUMS': 'drums',
 };
+// Rock Band pro drums: 110-112 mark yellow/blue/green as toms; otherwise they are cymbals.
+const TOM_MARKERS = [110, 111, 112];
 
 // Lowest note number (green fret) for each difficulty.
 const DIFFICULTY_BASE = { easy: 60, medium: 72, hard: 84, expert: 96 };
@@ -76,6 +79,28 @@ function sysexRanges(sysex, type, difficulty) {
 const inRanges = (tick, ranges) => ranges.some(([a, b]) => tick >= a && tick < b);
 const inSpans = (tick, spans) => spans.some((s) => tick >= s.tick && tick < s.tick + s.length);
 
+// Drums: base+0 kick, base+1..4 red/yellow/blue/green. Charts without any tom markers are
+// not pro-charted, so their yellow/blue/green are treated as toms.
+function parseDrumTrack(t, resolution) {
+  const out = {};
+  const starPower = t.spans.filter((s) => s.note === STAR_POWER_NOTE);
+  const solos = t.spans.filter((s) => s.note === SOLO_NOTE);
+  const toms = TOM_MARKERS.map((n) => t.spans.filter((s) => s.note === n));
+  const pro = toms.some((list) => list.length);
+  for (const [difficulty, base] of Object.entries(DIFFICULTY_BASE)) {
+    const notes = [];
+    for (const s of t.spans) {
+      const n = s.note - base;
+      if (n < 0 || n > 4) continue;
+      const lane = n === 0 ? OPEN_LANE : n - 1;
+      const cymbal = pro && lane >= 1 && lane <= 3 && !inSpans(s.tick, toms[lane - 1]);
+      notes.push({ tick: s.tick, lane, length: 0, force: null, tap: false, cymbal });
+    }
+    if (notes.length) out[`drums:${difficulty}`] = { notes, starPower, solos };
+  }
+  return out;
+}
+
 /**
  * @param {ArrayBuffer|Uint8Array} data contents of notes.mid
  * @returns {import('./constants.js').ParsedSong}
@@ -111,6 +136,10 @@ export function parseMid(data) {
     }
     const instrument = MIDI_INSTRUMENTS[t.name];
     if (!instrument) continue;
+    if (instrument === 'drums') {
+      Object.assign(tracks, parseDrumTrack(t, resolution));
+      continue;
+    }
     const enhancedOpens = t.texts.some((x) => /^\[?ENHANCED_OPENS\]?$/.test(x.text));
     const starPower = t.spans.filter((s) => s.note === STAR_POWER_NOTE);
     const solos = t.spans.filter((s) => s.note === SOLO_NOTE);

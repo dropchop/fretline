@@ -1,5 +1,6 @@
 // Parser for the text-based .chart format used by Clone Hero / Moonscraper.
 import { TempoMap } from './tempoMap.js';
+import { OPEN_LANE } from './constants.js';
 
 const CHART_INSTRUMENTS = {
   Single: 'guitar',
@@ -7,6 +8,7 @@ const CHART_INSTRUMENTS = {
   DoubleBass: 'bass',
   DoubleRhythm: 'rhythm',
   Keyboard: 'keys',
+  Drums: 'drums',
 };
 
 const DIFFICULTY_PREFIX = { Easy: 'easy', Medium: 'medium', Hard: 'hard', Expert: 'expert' };
@@ -93,7 +95,7 @@ export function parseChart(text) {
   for (const [name, lines] of Object.entries(sections)) {
     const m = name.match(/^(Easy|Medium|Hard|Expert)(\w+)$/);
     if (!m || !CHART_INSTRUMENTS[m[2]]) continue;
-    const track = parseTrack(lines);
+    const track = CHART_INSTRUMENTS[m[2]] === 'drums' ? parseDrumTrack(lines) : parseTrack(lines);
     if (track.notes.length) {
       tracks[`${CHART_INSTRUMENTS[m[2]]}:${DIFFICULTY_PREFIX[m[1]]}`] = track;
     }
@@ -119,6 +121,29 @@ export function parseChart(text) {
     // Community default for .chart files: 65/192 of a beat.
     hopoThresholdTicks: (resolution * 65) / 192,
   };
+}
+
+// Drums: N 0 = kick, N 1-4 = red/yellow/blue/green pads, N 66-68 mark yellow/blue/green as
+// cymbals. 2x kick (32), accents (34-38) and ghosts (40-44) are ignored.
+function parseDrumTrack(lines) {
+  const gems = [];
+  const cymbals = new Set(); // "tick:lane"
+  const starPower = [];
+  for (const line of lines) {
+    const ev = parseEventLine(line);
+    if (!ev) continue;
+    if (ev.type === 'N') {
+      const fret = Number(ev.args[0]);
+      if (fret === 0) gems.push({ tick: ev.tick, lane: OPEN_LANE, length: 0, force: null, tap: false });
+      else if (fret >= 1 && fret <= 4) gems.push({ tick: ev.tick, lane: fret - 1, length: 0, force: null, tap: false });
+      else if (fret >= 66 && fret <= 68) cymbals.add(`${ev.tick}:${fret - 65}`);
+    } else if (ev.type === 'S' && Number(ev.args[0]) === 2) {
+      starPower.push({ tick: ev.tick, length: Number(ev.args[1]) || 0 });
+    }
+  }
+  const notes = gems.map((g) => ({ ...g, cymbal: cymbals.has(`${g.tick}:${g.lane}`) }));
+  notes.sort((a, b) => a.tick - b.tick || a.lane - b.lane);
+  return { notes, starPower, solos: [] };
 }
 
 function parseTrack(lines) {

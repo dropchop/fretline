@@ -1,5 +1,5 @@
 // Turns parsed chart data into the list of timed, gameplay-ready notes for one track.
-import { OPEN_LANE } from './constants.js';
+import { OPEN_LANE, isDrums } from './constants.js';
 
 /**
  * @typedef {object} PlayNote
@@ -17,6 +17,7 @@ import { OPEN_LANE } from './constants.js';
  * @property {number} spPhrase index of the star power phrase containing it, or -1
  * @property {boolean} spEnd last note of its star power phrase
  * @property {boolean} solo
+ * @property {boolean} [cymbal]
  */
 
 /**
@@ -33,12 +34,14 @@ export function buildPlayableNotes(song, trackKey, options = {}) {
   const threshold = options.hopoThresholdTicks ?? song.hopoThresholdTicks;
   const { tempoMap, resolution } = song;
 
-  // Group gems that share a tick into chords.
+  // Group gems that share a tick into chords. Drum pads are hit one at a time, so each gem
+  // stays its own note.
+  const drums = isDrums(trackKey.split(':')[0]);
   const groups = [];
   for (const raw of track.notes) {
     let g = groups[groups.length - 1];
-    if (!g || g.tick !== raw.tick) {
-      g = { tick: raw.tick, lanes: new Set(), open: false, length: 0, force: null, tap: false };
+    if (drums || !g || g.tick !== raw.tick) {
+      g = { tick: raw.tick, lanes: new Set(), open: false, length: 0, force: null, tap: false, cymbal: !!raw.cymbal };
       groups.push(g);
     }
     if (raw.lane === OPEN_LANE) g.open = true;
@@ -57,7 +60,7 @@ export function buildPlayableNotes(song, trackKey, options = {}) {
     const mask = lanes.reduce((m, l) => m | (1 << l), 0);
 
     let natural = false;
-    if (prev && lanes.length <= 1 && g.tick - prev.tick <= threshold) {
+    if (!drums && prev && lanes.length <= 1 && g.tick - prev.tick <= threshold) {
       const sameAsPrev = mask === prev.mask && open === prev.open;
       // A single gem that was part of the previous chord is not a natural HOPO.
       const insidePrevChord = prev.lanes.length > 1 && (mask & prev.mask) === mask && !open;
@@ -86,6 +89,7 @@ export function buildPlayableNotes(song, trackKey, options = {}) {
       spPhrase: -1,
       spEnd: false,
       solo: false,
+      cymbal: g.cymbal,
     };
     notes.push(note);
     prev = note;

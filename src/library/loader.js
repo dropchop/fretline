@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { parseChart } from '../chart/chartFile.js';
 import { parseMid } from '../chart/midiFile.js';
 import { parseSongIni, stripTags } from '../chart/ini.js';
+import { parseSng, metadataToIni } from './sng.js';
 
 const AUDIO_EXT = /\.(ogg|opus|mp3|wav|m4a|aac|flac)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
@@ -34,7 +35,15 @@ async function expandFiles(fileList) {
       });
       await Promise.all(jobs);
     } else if (/\.sng$/i.test(file.name)) {
-      unsupported.push(file.name);
+      try {
+        const sng = parseSng(await file.arrayBuffer());
+        for (const [name, data] of Object.entries(sng.files)) {
+          entries.push({ path: `${file.name}/${name}`, blob: new Blob([data]) });
+        }
+        entries.push({ path: `${file.name}/song.ini`, blob: new Blob([metadataToIni(sng.metadata)]) });
+      } catch (err) {
+        unsupported.push(`${file.name}: ${err.message}`);
+      }
     } else {
       entries.push({ path, blob: file });
     }
@@ -57,7 +66,7 @@ export async function importFiles(fileList) {
   }
 
   const songs = [];
-  const errors = unsupported.map((n) => `${n}: .sng files aren't supported yet; use the song folder or a .zip`);
+  const errors = [...unsupported];
   for (const [dir, files] of byDir) {
     if (!CHART_FILES.some((f) => files[f])) continue;
     try {
@@ -69,7 +78,7 @@ export async function importFiles(fileList) {
     }
   }
   if (!songs.length && !errors.length) {
-    errors.push('No songs found. A song needs notes.chart or notes.mid plus its audio (e.g. song.ogg).');
+    errors.push('No songs found. A song needs notes.chart or notes.mid plus its audio (e.g. song.ogg), or a .sng file.');
   }
   return { songs, errors };
 }

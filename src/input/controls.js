@@ -28,7 +28,7 @@ export class TouchControls {
     this.h = handlers;
     /** pointerId -> lane (0-4) or 'open' */
     this.pointers = new Map();
-    this.laneCounts = [0, 0, 0, 0, 0];
+    this.laneCounts = [0, 0, 0, 0, 0, 0];
     this.openCount = 0;
     this.onDown = this.onDown.bind(this);
     this.onMove = this.onMove.bind(this);
@@ -48,7 +48,7 @@ export class TouchControls {
     if (y < strikeY - laneWidth * 1.1) return 'open';
     // lanes[i] is where lane i is drawn (already mirrored in left-handed mode).
     let best = 0;
-    for (let i = 1; i < 5; i++) if (Math.abs(lanes[i] - x) < Math.abs(lanes[best] - x)) best = i;
+    for (let i = 1; i < lanes.length; i++) if (Math.abs(lanes[i] - x) < Math.abs(lanes[best] - x)) best = i;
     return best;
   }
 

@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   muteOnMiss: true,
   instrument: 'guitar',
   difficulty: 'expert',
+  gamepadMap: null, // null = default layout; see input/gamepad.js
 };
 
 export function loadSettings() {
