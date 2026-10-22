@@ -32,7 +32,7 @@ export class GameEngine {
    * @param {import('../chart/playable.js').PlayNote[]} notes
    * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, hitWindow?: number, drums?: boolean}} options
    */
-  constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.07, drums = false }) {
+  constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.1, drums = false }) {
     this.notes = notes;
     this.tempoMap = tempoMap;
     // Drums always use tap rules: each pad hit judges its own lane, the kick is an open note.

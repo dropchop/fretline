@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine, HIT, MISSED } from '../src/game/engine.js';
+import { DEFAULT_SETTINGS } from '../src/settings.js';
 import { TempoMap } from '../src/chart/tempoMap.js';
 
 // 120 BPM: one beat = 0.5s.
@@ -27,6 +28,21 @@ function makeNotes(specs) {
     };
   });
 }
+
+describe('default hit window', () => {
+  it('is +/-100 ms', () => {
+    const early = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap });
+    early.fretDown(2, 1 - 0.095);
+    expect(early.state[0]).toBe(HIT);
+    const late = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap });
+    late.fretDown(2, 1 + 0.11);
+    expect(late.state[0]).not.toBe(HIT);
+  });
+  it('matches the default setting', () => {
+    expect(DEFAULT_SETTINGS.hitWindowMs).toBe(100);
+    expect(DEFAULT_SETTINGS.noteStyle).toBe('tiles');
+  });
+});
 
 describe('tap mode', () => {
   it('hits a note pressed inside the window and scores it', () => {

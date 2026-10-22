@@ -4,7 +4,8 @@ const KEY = 'fretline.settings';
 export const DEFAULT_SETTINGS = {
   noteSpeed: 1, // multiplier on the base highway speed
   calibrationMs: 0, // positive = audio reaches the player later (e.g. Bluetooth headphones)
-  hitWindowMs: 70, // +/- around each note
+  hitWindowMs: 100, // +/- around each note
+  noteStyle: 'tiles', // 'tiles' | 'classic'; see render/highway.js NOTE_STYLES
   leftHanded: false,
   inputMode: 'auto', // 'auto' | 'tap' | 'strum'
   volume: 0.9,
