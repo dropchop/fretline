@@ -10,6 +10,8 @@ built-in generated demo song so it works out of the box.
     all the way up the screen (at 390×844 a lane is 75 px at the strikeline and 56 px at a fifth of the way
     down from the top, against 72 and 15 px before). The price is time: the top of the screen shows about
     1.6 s of notes at the default note speed, so lower Note speed if you want more warning.
+    The score and the pause and Star Power buttons sit in their own strip above the highway, so no lane runs
+    under a button.
 - **Note styles** (Settings → Note style): **Tiles** (default) draws each note as a tall rectangle that fills its
   lane, Piano Tiles style, and **Classic** draws the round gems over fret rings. Both play the same five lanes,
   so Clone Hero charts work unchanged.
@@ -33,9 +35,12 @@ built-in generated demo song so it works out of the box.
   | Normal                | 20 ms   | 40 ms | 65 ms  | 100 ms           |
   | Strict                | 14 ms   | 28 ms | 46 ms  | 70 ms            |
 
-  A tap judges the note nearest to it in time, so in a fast run of one lane a late tap is not spent on the
-  note before. When tapping, a later note that is hit first only skips earlier notes in its own lane; notes
-  in other lanes can still be tapped until their own window ends.
+  A tap judges the earliest note in reach, as long as it would grade OK or better; if that note is already so
+  late it would only be Bad and a later note of the run is closer, the tap goes to the later note and the
+  earlier one counts as missed. A run played steadily a little late therefore keeps every note. When tapping,
+  a later note that is hit first only skips earlier notes in its own lane; notes in other lanes can still be
+  tapped until their own window ends, and a Star Power phrase waits for them before it pays. A stray tap
+  only breaks the streak when a note is within 100 ms.
 
 - **Scoring:** 50 points per gem (times the grade's share), 1x–4x multiplier every 10-note streak, sustain
   points, Star Power doubles the multiplier, guitar track muted on misses, star rating and results screen.
