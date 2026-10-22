@@ -265,10 +265,6 @@ export class GameEngine {
     return first && gradeFor(t - first.time, this.bands) !== 'bad' ? first : nearest;
   }
 
-  #anyPendingInWindow(t) {
-    return this.#findInWindow(t, () => true);
-  }
-
   /** A press that hits nothing only breaks the streak when a note is this close (see OVERHIT_WINDOW). */
   #anyPendingNear(t) {
     for (let i = this.nextIndex; i < this.notes.length; i++) {
