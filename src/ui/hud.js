@@ -29,13 +29,17 @@ export class Hud {
     this.shown = {};
   }
 
-  reset(engine, mode) {
+  reset(engine, mode, tiles = false) {
     this.shown = {};
     this.el.popup.className = 'popup';
     this.el.hint.textContent = {
-      tap: 'Tap the frets as notes reach them. Tap the highway for purple open notes.',
+      tap: tiles
+        ? 'Tap each tile in its column as it reaches the line. Tap the purple bar for open notes.'
+        : 'Tap the frets as notes reach them. Tap the highway for purple open notes.',
       strum: 'Hold frets 1-5 / A-G and strum with Enter, Space or the arrow keys. Shift = Star Power.',
-      drums: 'Hit the pads as notes reach them. Tap the highway (or press Space) for the orange kick.',
+      drums: tiles
+        ? 'Tap each tile in its column as it reaches the line. Tap the orange bar (or press Space) for the kick.'
+        : 'Hit the pads as notes reach them. Tap the highway (or press Space) for the orange kick.',
     }[mode];
     this.el.hint.classList.add('visible');
     clearTimeout(this.hintTimer);

@@ -5,6 +5,7 @@ import { AudioPlayer } from '../audio/player.js';
 import { TouchControls, KeyboardControls } from '../input/controls.js';
 import { GamepadControls, anyGamepadConnected } from '../input/gamepad.js';
 import { resolveInputMode } from '../settings.js';
+import { NOTE_STYLES } from '../render/highway.js';
 import { isDrums } from '../chart/constants.js';
 import { TiltControls } from '../input/tilt.js';
 
@@ -85,6 +86,7 @@ export class GameSession {
   start() {
     const { renderer, settings } = this;
     renderer.leftHanded = settings.leftHanded;
+    renderer.noteStyle = settings.noteStyle in NOTE_STYLES ? settings.noteStyle : 'tiles';
     renderer.configureLanes(this.drums ? 'drums' : 'guitar', settings.theme);
     renderer.setNoteSpeed(BASE_SPEED * settings.noteSpeed);
     renderer.reset();
@@ -95,7 +97,7 @@ export class GameSession {
       drums: this.drums,
     });
     this.lastNoteEnd = this.notes.reduce((m, n) => Math.max(m, n.endTime), this.range?.start ?? 0);
-    this.hud.reset(this.engine, this.drums ? 'drums' : this.mode);
+    this.hud.reset(this.engine, this.drums ? 'drums' : this.mode, renderer.noteStyle === 'tiles');
     this.#attachControls();
     const firstNote = this.notes[0]?.time ?? this.range?.start ?? 0;
     const leadIn = this.range ? Math.max(0, this.range.start - 2) : Math.min(0, firstNote - 3);

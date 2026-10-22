@@ -2,7 +2,7 @@
 import { $, show, registerActions } from '../router.js';
 import { settings } from '../state.js';
 import { saveSettings } from '../../settings.js';
-import { THEMES } from '../../render/highway.js';
+import { THEMES, NOTE_STYLES } from '../../render/highway.js';
 
 export function initSettings() {
   const range = (id, key, format) => {
@@ -25,6 +25,13 @@ export function initSettings() {
   theme.value = settings.theme in THEMES ? settings.theme : 'classic';
   theme.addEventListener('change', () => {
     settings.theme = theme.value;
+    saveSettings(settings);
+  });
+  const noteStyle = $('#noteStyle');
+  for (const [key, label] of Object.entries(NOTE_STYLES)) noteStyle.append(new Option(label, key));
+  noteStyle.value = settings.noteStyle in NOTE_STYLES ? settings.noteStyle : 'tiles';
+  noteStyle.addEventListener('change', () => {
+    settings.noteStyle = noteStyle.value;
     saveSettings(settings);
   });
   for (const key of ['leftHanded', 'muteOnMiss', 'tiltStarPower']) {

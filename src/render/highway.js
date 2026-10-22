@@ -50,6 +50,18 @@ const HIGHWAY_WIDTH = 5.6;
 const HIGHWAY_LENGTH = 70;
 const GEM_RADIUS = 0.4;
 
+// Tiles note style: full-lane-width rectangles, with the open-note tap bar in front of the frets.
+const TILE_GAP = 0.08; // gap between neighbouring tiles
+const TILE_LENGTH = 1.7; // world units, along the highway
+const TILE_HEIGHT = 0.14;
+const TILE_MIN_LENGTH = 0.35; // tiles of a fast run shrink to this before they would overlap
+const TILE_CLIP_Z = 0.7; // tiles that slide past the strikeline vanish before the open bar
+const OPEN_BAR_Z = 1.0; // near edge (towards the player) of the open bar is OPEN_BAR_Z + OPEN_BAR_DEPTH
+const OPEN_BAR_DEPTH = 1.5;
+export const NOTE_STYLES = { tiles: 'Tiles', classic: 'Classic' };
+
+const FAR_Z = 20; // second sample row for the touch columns (world units up the highway)
+
 /** Where the strikeline should sit, as a fraction of screen height from the top. */
 const STRIKELINE_SCREEN_Y = 0.8;
 
@@ -109,6 +121,10 @@ export class HighwayRenderer {
     this.speed = 9; // world units per second of song time
     this.leftHanded = false;
     this.laneCount = 5;
+    /** @type {WeakMap<object, Float64Array>} tile spacing per note list */
+    this.gapCache = new WeakMap();
+    /** 'tiles' | 'classic'; set before configureLanes() */
+    this.noteStyle = 'tiles';
     this.colors = LANE_COLORS;
     this.openColor = OPEN_COLOR;
 
@@ -183,8 +199,15 @@ export class HighwayRenderer {
     bar.position.set(0, 0.02, 0);
     this.strikeGroup.add(bar);
 
-    const ringGeo = new THREE.TorusGeometry(GEM_RADIUS * 1.02, 0.07, 12, 40);
-    const padGeo = new THREE.CylinderGeometry(GEM_RADIUS * 0.85, GEM_RADIUS * 0.85, 0.05, 32);
+    const tiles = this.noteStyle === 'tiles';
+    const tileW = this.tileWidth();
+    // Tiles: a flat marker bar per lane at the strikeline and a pad in front of it.
+    const ringGeo = tiles
+      ? new THREE.BoxGeometry(tileW, 0.08, 0.1)
+      : new THREE.TorusGeometry(GEM_RADIUS * 1.02, 0.07, 12, 40);
+    const padGeo = tiles
+      ? new THREE.BoxGeometry(tileW, 0.05, 0.5)
+      : new THREE.CylinderGeometry(GEM_RADIUS * 0.85, GEM_RADIUS * 0.85, 0.05, 32);
     for (let lane = 0; lane < this.laneCount; lane++) {
       const color = this.colors[lane];
       const group = new THREE.Group();
@@ -192,18 +215,41 @@ export class HighwayRenderer {
         ringGeo,
         new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4 }),
       );
-      ring.rotation.x = Math.PI / 2;
+      if (!tiles) ring.rotation.x = Math.PI / 2;
       const padMat = new THREE.MeshStandardMaterial({
         color: 0x111111,
         emissive: color,
         emissiveIntensity: 0,
       });
       const pad = new THREE.Mesh(padGeo, padMat);
+      if (tiles) pad.position.z = 0.3;
       group.add(ring, pad);
       group.position.set(this.laneX(lane), 0.06, 0);
       this.strikeGroup.add(group);
       this.frets.push({ group, ring, padMat, pressed: false, flash: 0 });
     }
+    if (tiles) this.#buildOpenBar();
+  }
+
+  /** Width of one tile: the lane spacing minus a gap. */
+  tileWidth() {
+    return LANE_SPACING * (5 / this.laneCount) - TILE_GAP;
+  }
+
+  /** The purple tap bar under the frets where open notes (and the drum kick) are played. */
+  #buildOpenBar() {
+    const width = this.laneCount * LANE_SPACING * (5 / this.laneCount) - TILE_GAP;
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.06, OPEN_BAR_DEPTH),
+      new THREE.MeshStandardMaterial({
+        color: 0x16101f,
+        emissive: this.openColor,
+        emissiveIntensity: 0.15,
+      }),
+    );
+    bar.position.set(0, 0.03, OPEN_BAR_Z + OPEN_BAR_DEPTH / 2);
+    this.strikeGroup.add(bar);
+    this.openBar = bar;
   }
 
   #buildLaneMaterials() {
@@ -275,6 +321,8 @@ export class HighwayRenderer {
     this.openPool = this.#pool(() => new THREE.Mesh(openGeo, this.mat.open));
     const unitBox = new THREE.BoxGeometry(1, 1, 1);
     this.tailPool = this.#pool(() => new THREE.Mesh(unitBox, this.mat.tail[0]));
+    this.tilePool = this.#pool(() => new THREE.Mesh(unitBox, this.mat.lane[0]));
+    this.markPool = this.#pool(() => new THREE.Mesh(unitBox, this.mat.capStrum));
     const lineGeo = new THREE.PlaneGeometry(HIGHWAY_WIDTH, 1);
     this.beatPool = this.#pool(() => {
       const m = new THREE.Mesh(lineGeo, this.mat.beat);
@@ -344,7 +392,7 @@ export class HighwayRenderer {
     this.lookahead = Math.min(HIGHWAY_LENGTH - 6, dist * 3.2) / this.speed; // seconds of notes to draw
   }
 
-  /** Screen-space x (CSS px) of each lane at the strikeline, for aligning touch controls. */
+  /** Screen-space geometry (CSS px) of the lanes, for aligning touch controls. See TouchLayout. */
   laneScreenPositions() {
     const rect = this.canvas.getBoundingClientRect();
     const v = new THREE.Vector3();
@@ -354,7 +402,25 @@ export class HighwayRenderer {
       lanes.push(((v.x + 1) / 2) * rect.width);
     }
     v.set(0, 0, 0).project(this.camera);
-    return { lanes, strikeY: ((1 - v.y) / 2) * rect.height, laneWidth: Math.abs(lanes[1] - lanes[0]) };
+    const strikeY = ((1 - v.y) / 2) * rect.height;
+    const layout = { lanes, strikeY, laneWidth: Math.abs(lanes[1] - lanes[0]) };
+    if (this.noteStyle !== 'tiles') return { ...layout, tiles: false };
+    // Lane lines project to straight lines on screen, so one more row up the highway is enough to
+    // place a lane at any height.
+    const farLanes = [];
+    for (let lane = 0; lane < this.laneCount; lane++) {
+      v.set(this.laneX(this.#visualLane(lane)), 0, -FAR_Z).project(this.camera);
+      farLanes.push(((v.x + 1) / 2) * rect.width);
+    }
+    v.set(0, 0, -FAR_Z).project(this.camera);
+    const farY = ((1 - v.y) / 2) * rect.height;
+    v.set(0, 0, OPEN_BAR_Z).project(this.camera);
+    return {
+      ...layout,
+      tiles: true,
+      openY: ((1 - v.y) / 2) * rect.height,
+      far: { y: farY, lanes: farLanes },
+    };
   }
 
   #visualLane(lane) {
@@ -389,9 +455,13 @@ export class HighwayRenderer {
     const horizon = t + this.lookahead;
     const notes = engine.notes;
 
+    const tiles = this.noteStyle === 'tiles';
+    const gaps = tiles ? this.#gapsFor(notes) : null;
     this.gemPool.begin();
     this.openPool.begin();
     this.tailPool.begin();
+    this.tilePool.begin();
+    this.markPool.begin();
     this.beatPool.begin();
 
     for (const line of engine.tempoMap.beatLines(t - 0.3, horizon)) {
@@ -411,10 +481,15 @@ export class HighwayRenderer {
       const state = engine.state[n.id];
       const isSp = n.spPhrase >= 0 && !engine.brokenPhrases.has(n.spPhrase);
 
-      if (n.sustain) this.#drawTail(n, t, z, state, engine, isSp);
+      const len = tiles ? this.#tileLength(gaps[n.id]) : 0;
+      if (n.sustain) this.#drawTail(n, t, z, state, engine, isSp, len);
       if (state === HIT) continue;
       const nz = z(n.time);
       if (nz > 4) continue;
+      if (tiles) {
+        this.#drawTiles(n, nz, len, state, isSp);
+        continue;
+      }
 
       if (n.open) {
         const m = this.openPool.next();
@@ -443,13 +518,72 @@ export class HighwayRenderer {
     this.gemPool.end();
     this.openPool.end();
     this.tailPool.end();
+    this.tilePool.end();
+    this.markPool.end();
     this.beatPool.end();
 
     this.#animateFrets(dt, sp);
     this.renderer.render(this.scene, this.camera);
   }
 
-  #drawTail(n, t, z, state, engine, isSp) {
+  /** Seconds from each note to the next one it could overlap (same lane, or an open note), by note id. */
+  #gapsFor(notes) {
+    let gaps = this.gapCache.get(notes);
+    if (gaps) return gaps;
+    gaps = new Float64Array(notes.length).fill(Infinity);
+    for (let i = 0; i < notes.length; i++) {
+      const a = notes[i];
+      for (let j = i + 1; j < notes.length; j++) {
+        const b = notes[j];
+        if (b.time - a.time > 1) break; // too far for tiles to touch at any note speed
+        if (a.open || b.open || a.lanes.some((l) => b.lanes.includes(l))) {
+          if (b.time > a.time) {
+            gaps[a.id] = b.time - a.time;
+            break;
+          }
+        }
+      }
+    }
+    this.gapCache.set(notes, gaps);
+    return gaps;
+  }
+
+  /** Tile length in world units: the full length, shrunk so a tile never touches the next in its lane. */
+  #tileLength(gap) {
+    return Math.max(TILE_MIN_LENGTH, Math.min(TILE_LENGTH, gap * this.speed - 0.18));
+  }
+
+  #drawTiles(n, nz, len, state, isSp) {
+    // The leading (near) edge reaches the strikeline at the note's time; the tile trails behind it.
+    const zNear = Math.min(nz, TILE_CLIP_Z);
+    const zFar = nz - len;
+    if (zNear - zFar < 0.05) return;
+    const size = zNear - zFar;
+    const zMid = (zNear + zFar) / 2;
+    if (n.open) {
+      const m = this.tilePool.next();
+      m.material = state === MISSED ? this.mat.openMissed : isSp ? this.mat.sp : this.mat.open;
+      m.scale.set(this.laneCount * LANE_SPACING * (5 / this.laneCount) - TILE_GAP, TILE_HEIGHT, size);
+      m.position.set(0, 0.1, zMid);
+      return;
+    }
+    const mark = n.cymbal ? this.mat.capCymbal : n.tap ? this.mat.capTap : n.hopo ? this.mat.capHopo : null;
+    for (const lane of n.lanes) {
+      const x = this.laneX(this.#visualLane(lane));
+      const m = this.tilePool.next();
+      m.material = state === MISSED ? this.mat.laneMissed[lane] : isSp ? this.mat.sp : this.mat.lane[lane];
+      m.scale.set(this.tileWidth(), TILE_HEIGHT, size);
+      m.position.set(x, 0.1, zMid);
+      if (mark && nz - 0.3 < TILE_CLIP_Z) {
+        const k = this.markPool.next();
+        k.material = mark;
+        k.scale.set(this.tileWidth() * 0.5, TILE_HEIGHT + 0.03, 0.14);
+        k.position.set(x, 0.1, nz - 0.3);
+      }
+    }
+  }
+
+  #drawTail(n, t, z, state, engine, isSp, headLen) {
     const dropped = engine.sustainDroppedAt[n.id];
     const holding = state === HIT && dropped === Infinity && n.endTime > t;
     let start = n.time;
@@ -457,19 +591,22 @@ export class HighwayRenderer {
     const end = n.endTime;
     if (end <= start || z(end) > 4) return;
     const dead = state === MISSED || (state === HIT && dropped !== Infinity);
-    const zStart = Math.min(z(start), 4);
+    const tiles = this.noteStyle === 'tiles';
+    // Tiles: the tail runs from the far end of the head tile, and stops at the open bar.
+    const zStart = tiles ? Math.min(z(start) - (holding ? 0 : headLen), TILE_CLIP_Z) : Math.min(z(start), 4);
     const zEnd = z(end);
+    if (zStart <= zEnd) return;
     const lanes = n.open ? [null] : n.lanes;
     for (const lane of lanes) {
       const m = this.tailPool.next();
       const wobble = holding ? 1 + 0.25 * Math.sin(t * 40 + (lane ?? 0)) : 1;
       if (lane === null) {
         m.material = dead ? this.mat.tailDead : isSp ? this.mat.tailSp : this.mat.tailOpen;
-        m.scale.set(HIGHWAY_WIDTH - 0.8, 0.03, zStart - zEnd);
+        m.scale.set(tiles ? HIGHWAY_WIDTH - 1.2 : HIGHWAY_WIDTH - 0.8, 0.03, zStart - zEnd);
         m.position.set(0, 0.04, (zStart + zEnd) / 2);
       } else {
         m.material = dead ? this.mat.tailDead : isSp ? this.mat.tailSp : this.mat.tail[lane];
-        m.scale.set(0.16 * wobble, 0.05, zStart - zEnd);
+        m.scale.set((tiles ? this.tileWidth() * 0.4 : 0.16) * wobble, 0.05, zStart - zEnd);
         m.position.set(this.laneX(this.#visualLane(lane)), 0.05, (zStart + zEnd) / 2);
       }
     }
