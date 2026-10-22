@@ -13,13 +13,51 @@
  */
 
 /**
- * Multi-touch controls over the play area. The bottom band (around the strikeline) is split into
- * five fret columns aligned with the 3D frets; touching higher up on the highway is an open strum.
+ * @typedef {object} TouchLayout screen-space (CSS px) geometry from HighwayRenderer.laneScreenPositions()
+ * @property {number[]} lanes x of each lane at the strikeline (already mirrored in left-handed mode)
+ * @property {number} strikeY
+ * @property {number} laneWidth
+ * @property {boolean} [tiles] Tiles note style: lanes are full-height columns, open notes use the bar
+ * @property {number} [openY] Tiles: touches at or below this y are on the open tap bar
+ * @property {{y: number, lanes: number[]}} [far] Tiles: lane x again at a higher screen row. Lanes narrow
+ *   toward the horizon along straight lines, so a column at any y is a straight-line blend of the two.
+ */
+
+/**
+ * Which fret (0-4) or 'open' a touch at (x, y) means. Classic: the band around the strikeline is the
+ * frets and anything higher is open. Tiles: every lane is a column from the top of the screen down to
+ * the open bar, which spans the full width under the frets.
+ * @param {number} x
+ * @param {number} y
+ * @param {TouchLayout} layout
+ * @returns {number | 'open'}
+ */
+export function touchTarget(x, y, layout) {
+  const { lanes, strikeY, laneWidth, tiles, openY, far } = layout;
+  let at = lanes;
+  if (tiles) {
+    if (openY !== undefined && y >= openY) return 'open';
+    if (far && far.y !== strikeY) {
+      const k = (y - strikeY) / (far.y - strikeY);
+      at = lanes.map((l, i) => l + (far.lanes[i] - l) * k);
+    }
+  } else if (y < strikeY - laneWidth * 1.1) {
+    return 'open';
+  }
+  let best = 0;
+  for (let i = 1; i < at.length; i++) if (Math.abs(at[i] - x) < Math.abs(at[best] - x)) best = i;
+  return best;
+}
+
+/**
+ * Multi-touch controls over the play area. Classic: the bottom band (around the strikeline) is split
+ * into fret columns aligned with the 3D frets and touching higher up is an open strum. Tiles: each
+ * lane is a column all the way up the screen and the open bar sits under the frets.
  */
 export class TouchControls {
   /**
    * @param {HTMLElement} surface
-   * @param {() => {lanes: number[], strikeY: number, laneWidth: number}} layout
+   * @param {() => TouchLayout} layout
    * @param {ControlHandlers} handlers
    */
   constructor(surface, layout, handlers) {
@@ -42,14 +80,7 @@ export class TouchControls {
 
   #target(e) {
     const rect = this.surface.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const { lanes, strikeY, laneWidth } = this.layout();
-    if (y < strikeY - laneWidth * 1.1) return 'open';
-    // lanes[i] is where lane i is drawn (already mirrored in left-handed mode).
-    let best = 0;
-    for (let i = 1; i < lanes.length; i++) if (Math.abs(lanes[i] - x) < Math.abs(lanes[best] - x)) best = i;
-    return best;
+    return touchTarget(e.clientX - rect.left, e.clientY - rect.top, this.layout());
   }
 
   #press(target, ts) {
