@@ -60,7 +60,7 @@ const OPEN_BAR_Z = 1.0; // near edge (towards the player) of the open bar is OPE
 const OPEN_BAR_DEPTH = 1.5;
 export const NOTE_STYLES = { tiles: 'Tiles', classic: 'Classic' };
 
-const FAR_Z = 20; // second sample row for the touch columns (world units up the highway)
+const FAR_Z = 10; // second sample row for the touch columns (world units up the highway)
 
 // Portrait camera. A steep, narrow-angle view keeps the lanes nearly as wide at the top of the screen
 // as at the strikeline, so there is room for a thumb on every lane the whole way up; the price is

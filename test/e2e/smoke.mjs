@@ -215,8 +215,8 @@ await withServer(async () => {
   });
   console.log('tile taps:', JSON.stringify(taps));
   assert(
-    taps.tiles && taps.strikeY - taps.farY > 200,
-    'tiles layout with a far row well above the strikeline',
+    taps.tiles && taps.strikeY - taps.farY > 200 && taps.farY > 0,
+    'tiles layout with a far row well above the strikeline, on screen',
   );
   assert(
     taps.log.join() === 'fret3,fret0,open',
