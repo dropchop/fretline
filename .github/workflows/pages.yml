@@ -1,10 +1,9 @@
-# Publishes the game to GitHub Pages on every push to main.
+# Publishes the game to GitHub Pages when run by hand (Actions tab -> Deploy to GitHub Pages -> Run workflow).
 # One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
+# Not run on push, so it doesn't fail while Pages is off; add `push: branches: [main]` back to deploy on every push.
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

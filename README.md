@@ -68,7 +68,8 @@ enforce style. CI runs all of it plus the browser smoke test.
 To play on a phone, the page must be served over **HTTPS** (or localhost) for some features such as
 installing to the home screen and the screen wake lock. The included GitHub Pages workflow
 (`.github/workflows/pages.yml`) handles that: enable it once in **Settings → Pages → Source: GitHub
-Actions**, then every push to `main` deploys.
+Actions**, then run it from the Actions tab (**Deploy to GitHub Pages → Run workflow**). It doesn't run on
+push, so it can't fail while Pages is off; add a `push` trigger to deploy on every push to `main`.
 
 ## Single-file build
 
