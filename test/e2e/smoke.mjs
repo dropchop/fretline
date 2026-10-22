@@ -1,6 +1,7 @@
 // Browser smoke test: builds the app, serves it, and plays it in a phone-sized headless Chromium.
 // Run with `npm run test:e2e`. Exits non-zero on any failure.
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { chromium, devices } from 'playwright';
@@ -77,6 +78,44 @@ await withServer(async () => {
   });
   // CI runners render slowly, so taps can land a frame late. The default Forgiving timing is the
   // widest the game offers: the test checks that input, judging and scoring work, not frame timing.
+  // Chorus Encore is never contacted for real: both of its hosts are answered here, and counted.
+  const enchor = { searches: [], downloads: [], other: [] };
+  const cors = { 'access-control-allow-origin': '*' };
+  const searchReply = readFileSync(path.join(fixtures, 'enchor-search.json'));
+  const songFile = readFileSync(path.join(fixtures, 'packed.sng'));
+  await ctx.route(/^https?:\/\/[^/]*enchor\.us\//, (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() === 'OPTIONS')
+      return route.fulfill({
+        status: 204,
+        headers: {
+          ...cors,
+          'access-control-allow-headers': 'content-type',
+          'access-control-allow-methods': 'GET,POST',
+        },
+      });
+    if (url.hostname === 'api.enchor.us' && url.pathname === '/search') {
+      enchor.searches.push(req.postDataJSON());
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        headers: cors,
+        body: searchReply,
+      });
+    }
+    if (url.hostname === 'files.enchor.us' && url.pathname.endsWith('.sng')) {
+      enchor.downloads.push(url.pathname);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/octet-stream',
+        headers: cors,
+        body: songFile,
+      });
+    }
+    enchor.other.push(req.url());
+    return route.abort();
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -103,6 +142,39 @@ await withServer(async () => {
   const drums = await playDemo(page, { instrument: 'Drums', speed: 60, section: 'Chords' });
   console.log('drums section @60%:', drums.hits, '/', drums.total);
   assert(drums.total < 100 && drums.hits / drums.total > 0.85, 'drum section bot should hit >85%');
+
+  // Find songs: search, download and add, against the mocked Chorus Encore. Nothing is sent until the player acts.
+  await page.tap('[data-action=find-songs]');
+  await page.waitForSelector('#find.active');
+  await page.fill('#findQuery', 'te'); // too short for a typing search
+  await page.waitForTimeout(1500);
+  assert(enchor.searches.length === 0, 'opening Find songs and typing a short query sends no request');
+  await page.fill('#findQuery', 'test');
+  await page.tap('#findForm button[type=submit]');
+  await page.waitForFunction(() => document.querySelectorAll('#findResults li').length === 3);
+  assert(enchor.searches.length === 1, `one search sent, got ${enchor.searches.length}`);
+  assert(
+    JSON.stringify(enchor.searches[0]) === JSON.stringify({ search: 'test', per_page: 8, page: 1 }),
+    `search body, got ${JSON.stringify(enchor.searches[0])}`,
+  );
+  const found = await page.locator('#find').innerText();
+  assert(found.includes('Test Flight') && found.includes('Showing 3 of 143'), 'search results are listed');
+  await page.tap('#findForm button[type=submit]'); // the same query again comes from the session cache
+  await page.waitForTimeout(300);
+  assert(enchor.searches.length === 1, 'a repeated search is answered from the cache');
+  await page.locator('#findResults .find-add').first().tap();
+  await page.waitForFunction(
+    () => document.querySelector('#findResults .find-add')?.textContent === 'Added ✓',
+  );
+  assert(enchor.downloads.length === 1, 'one download after one tap');
+  assert(/^\/[0-9a-f]{32}\.sng$/.test(enchor.downloads[0]), `download path, got ${enchor.downloads[0]}`);
+  await page.tap('#find [data-action=back]');
+  await page.waitForSelector('#menu.active');
+  assert(
+    (await page.locator('#songList').innerText()).includes('Packed Song'),
+    'the downloaded song is in the library',
+  );
+  assert(enchor.other.length === 0, `no other requests to Chorus Encore, got ${enchor.other}`);
 
   await page.setInputFiles('#fileInput', [
     path.join(fixtures, 'pack.zip'),

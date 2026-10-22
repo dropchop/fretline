@@ -46,6 +46,21 @@ built-in generated demo song so it works out of the box.
   points, Star Power doubles the multiplier, guitar track muted on misses, star rating and results screen.
   Stars compare your score with a run of all Perfects (15 / 35 / 55 / 75 / 90 %), so all Good is four stars
   and all OK is two. Gold stars need a full combo that is also at least 90 % of a perfect run.
+- **Find songs** (menu → Find songs): search the community chart index [Chorus Encore](https://www.enchor.us/)
+  and tap **Download & add** to put a chart straight into the library. Or find a chart on
+  [enchor.us](https://www.enchor.us/), download it, and use **Add songs** to pick the file. Charts are made by
+  third parties and can include copyrighted music; you are responsible for what you download. Chorus Encore's
+  maintainer is fine with this on one condition, don't hammer the site, so the app:
+  - sends a request only when you submit a search, pause typing for 0.8 s (3 or more characters) or tap Download,
+    and never polls, prefetches or refreshes in the background;
+  - remembers each search for the session, so repeating it costs no request;
+  - sends at most 10 requests in any 60 seconds, at least 1 second apart (the site allows about 50), by refusing
+    the extra ones with a message rather than queueing them;
+  - after a 429 or a 5xx error, makes no requests for 5 s, then 10, 20, 40, 80 and 120 s while it keeps failing
+    (or the server's `Retry-After`, up to 120 s), never retries by itself and says so;
+  - fetches songs straight from Chorus Encore into your browser. Nothing is proxied, hosted or cached on our side.
+    Search results are 8 per page; "Show more" asks for the next page. The API is undocumented: replies are checked,
+    and a changed shape shows an error instead of nonsense.
 - **Song library** stored on the device (IndexedDB), so songs stay after reloading.
 - **Settings:** note style, note speed, audio latency calibration (with a tap-along calibrator), timing
   (Forgiving / Normal / Strict), volume, left-handed mode, controls mode. The old Hit window slider is gone;
@@ -118,6 +133,7 @@ Files app previews HTML without running scripts, so open the file in Safari via 
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `src/chart/`            | `.chart`, `.mid` and `song.ini` parsers, tempo map, conversion into timed notes (chords, HOPOs, Star Power) |
 | `src/game/engine.js`    | Gameplay rules: hit/miss judging, scoring, streak, multiplier, sustains, Star Power                         |
+| `src/library/encore.js` | Chorus Encore search and download client: throttle, session cache, back-off, typing delay                   |
 | `src/game/timing.js`    | Timing grades: the Perfect / Good / OK / Bad bands per Timing setting and the points for each               |
 | `src/game/session.js`   | One play-through: connects audio clock, engine, renderer, HUD and controls                                  |
 | `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting                                 |
