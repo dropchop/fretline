@@ -32,7 +32,12 @@ async function withServer(fn) {
     }
     await fn();
   } finally {
-    process.kill(-server.pid);
+    try {
+      process.kill(-server.pid);
+    } catch (err) {
+      // The server is already gone; don't let that hide the failure that made the test stop.
+      console.error('preview server was not running at the end:', err.code);
+    }
   }
 }
 
@@ -162,6 +167,7 @@ await withServer(async () => {
   await page.tap('#findForm button[type=submit]'); // the same query again comes from the session cache
   await page.waitForTimeout(300);
   assert(enchor.searches.length === 1, 'a repeated search is answered from the cache');
+  await page.waitForTimeout(1100); // the client keeps one second between requests
   await page.locator('#findResults .find-add').first().tap();
   await page.waitForFunction(
     () => document.querySelector('#findResults .find-add')?.textContent === 'Added ✓',
