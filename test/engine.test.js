@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine, HIT, MISSED } from '../src/game/engine.js';
-import { DEFAULT_SETTINGS } from '../src/settings.js';
+import { DEFAULT_SETTINGS, loadSettings } from '../src/settings.js';
 import { TempoMap } from '../src/chart/tempoMap.js';
 
 // 120 BPM: one beat = 0.5s.
@@ -29,18 +29,239 @@ function makeNotes(specs) {
   });
 }
 
-describe('default hit window', () => {
-  it('is +/-100 ms', () => {
-    const early = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap });
-    early.fretDown(2, 1 - 0.095);
-    expect(early.state[0]).toBe(HIT);
-    const late = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap });
-    late.fretDown(2, 1 + 0.11);
-    expect(late.state[0]).not.toBe(HIT);
-  });
-  it('matches the default setting', () => {
-    expect(DEFAULT_SETTINGS.hitWindowMs).toBe(100);
+describe('timing grades', () => {
+  const bandsMs = { forgiving: [40, 80, 130, 200], normal: [20, 40, 65, 100], strict: [14, 28, 46, 70] };
+  const grades = ['perfect', 'good', 'ok', 'bad'];
+  const tapAt = (offset, timing) => {
+    const e = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap, timing });
+    e.fretDown(2, 1 + offset);
+    return e;
+  };
+  const lastGrade = (e) => e.takeEvents().find((ev) => ev.type === 'hit')?.grade;
+
+  for (const [timing, bands] of Object.entries(bandsMs)) {
+    describe(timing, () => {
+      bands.forEach((edge, i) => {
+        for (const sign of [-1, 1]) {
+          it(`grades ${sign < 0 ? 'early' : 'late'} hits at the ${grades[i]} edge (${edge} ms) as ${grades[i]}`, () => {
+            expect(lastGrade(tapAt((sign * edge) / 1000, timing))).toBe(grades[i]);
+          });
+          if (i < 3) {
+            it(`grades ${sign < 0 ? 'early' : 'late'} hits 1 ms past the ${grades[i]} edge as ${grades[i + 1]}`, () => {
+              expect(lastGrade(tapAt((sign * (edge + 1)) / 1000, timing))).toBe(grades[i + 1]);
+            });
+          }
+        }
+      });
+      it('does not judge a tap 1 ms past the Bad edge, on either side', () => {
+        const edge = bands[3];
+        expect(tapAt((edge + 1) / 1000, timing).state[0]).not.toBe(HIT);
+        expect(tapAt(-(edge + 1) / 1000, timing).state[0]).not.toBe(HIT);
+      });
+      it('keeps a note pending until its Bad edge has passed, then misses it', () => {
+        const e = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap, timing });
+        e.update(1 + bands[3] / 1000);
+        expect(e.state[0]).toBe(0);
+        e.update(1 + (bands[3] + 1) / 1000);
+        expect(e.state[0]).toBe(MISSED);
+      });
+    });
+  }
+
+  it('defaults to Forgiving, with the Bad edge at 200 ms', () => {
+    const e = new GameEngine(makeNotes([{ time: 1, lane: 2 }]), { tempoMap });
+    expect(e.hitWindow).toBeCloseTo(0.2);
+    expect(DEFAULT_SETTINGS.timing).toBe('forgiving');
     expect(DEFAULT_SETTINGS.noteStyle).toBe('tiles');
+  });
+
+  it('falls back to Forgiving for an unknown timing', () => {
+    expect(new GameEngine([], { tempoMap, timing: 'bogus' }).hitWindow).toBeCloseTo(0.2);
+  });
+
+  it('scores 100 / 75 / 50 / 25 % of the gem for Perfect / Good / OK / Bad', () => {
+    expect(tapAt(0.03).score).toBe(50);
+    expect(tapAt(0.07).score).toBe(37.5);
+    expect(tapAt(0.12).score).toBe(25);
+    expect(tapAt(0.19).score).toBe(12.5);
+  });
+
+  it('scales a chord by the grade of its completing tap', () => {
+    const e = new GameEngine(makeNotes([{ time: 1, lanes: [0, 2] }]), { tempoMap });
+    e.fretDown(0, 0.95);
+    e.fretDown(2, 1.07);
+    expect(e.score).toBe(75);
+  });
+
+  it('keeps the streak on every grade and counts grades and early / late', () => {
+    const specs = [0, 0.07, 0.12, 0.19, -0.07].map((_, i) => ({ time: 1 + i, lane: 0 }));
+    const e = new GameEngine(makeNotes(specs), { tempoMap });
+    [0, 0.07, 0.12, 0.19, -0.07].forEach((o, i) => {
+      e.fretDown(0, 1 + i + o);
+      e.fretUp(0, 1 + i + o + 0.01);
+    });
+    expect(e.streak).toBe(5);
+    const stats = e.stats();
+    expect(stats.grades).toEqual({ perfect: 1, good: 2, ok: 1, bad: 1 });
+    expect(stats.early).toBe(1);
+    expect(stats.late).toBe(3);
+    expect(stats.windowMs).toBeCloseTo(200);
+    expect(stats.perfectMs).toBeCloseTo(40);
+  });
+
+  it('feeds the multiplier at full rate whatever the grade, but scores the grade share', () => {
+    const specs = Array.from({ length: 11 }, (_, i) => ({ time: 1 + i, lane: 0 }));
+    const e = new GameEngine(makeNotes(specs), { tempoMap });
+    specs.forEach((s) => {
+      e.fretDown(0, s.time + 0.19); // every hit Bad
+      e.fretUp(0, s.time + 0.2);
+    });
+    expect(e.multiplier).toBe(2);
+    expect(e.score).toBe(10 * 12.5 + 12.5 * 2);
+  });
+
+  it('gives gold stars only to a full combo that is mostly Perfect and Good', () => {
+    const specs = Array.from({ length: 20 }, (_, i) => ({ time: 1 + i, lane: 0 }));
+    const play = (offset) => {
+      const e = new GameEngine(makeNotes(specs), { tempoMap });
+      specs.forEach((s) => {
+        e.fretDown(0, s.time + offset);
+        e.fretUp(0, s.time + offset + 0.01);
+      });
+      return e.stats();
+    };
+    expect(play(0).stars).toBe(6);
+    // All Good is 75% of a perfect run: a full combo, but four stars.
+    expect(play(0.07)).toMatchObject({ fullCombo: true, stars: 4 });
+    expect(play(0.12)).toMatchObject({ fullCombo: true, stars: 2 });
+    expect(play(0.19)).toMatchObject({ fullCombo: true, stars: 1 });
+  });
+});
+
+describe('judging inside a wide window', () => {
+  it('judges the nearest note of a same-lane run, not the first one in reach', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.12, lane: 0 },
+        { time: 1.24, lane: 0 },
+      ]),
+      { tempoMap },
+    );
+    e.fretDown(0, 1.13); // 130 ms after note 0, 10 ms after note 1
+    expect(e.state[1]).toBe(HIT);
+    expect(e.takeEvents().find((ev) => ev.type === 'hit')).toMatchObject({ grade: 'perfect' });
+    // The first note of the run was skipped over.
+    expect(e.state[0]).toBe(MISSED);
+    expect(e.state[2]).toBe(0);
+  });
+
+  it('judges the earlier note when a tap is exactly between two', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.1, lane: 0 },
+      ]),
+      { tempoMap },
+    );
+    e.fretDown(0, 1.05);
+    expect(e.state[0]).toBe(HIT);
+    expect(e.state[1]).toBe(0);
+  });
+
+  it('lets a run be tapped steadily late without skipping any note', () => {
+    const specs = Array.from({ length: 8 }, (_, i) => ({ time: 1 + i * 0.12, lane: 0 }));
+    const e = new GameEngine(makeNotes(specs), { tempoMap });
+    specs.forEach((s) => {
+      e.fretDown(0, s.time + 0.05);
+      e.fretUp(0, s.time + 0.06);
+    });
+    expect(e.hits).toBe(8);
+    expect(e.misses).toBe(0);
+  });
+
+  it('keeps an earlier note in another lane tappable when a later one is hit first', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.1, lane: 3 },
+      ]),
+      { tempoMap },
+    );
+    e.fretDown(3, 1.1);
+    expect(e.state[1]).toBe(HIT);
+    expect(e.state[0]).toBe(0);
+    e.fretDown(0, 1.12);
+    expect(e.state[0]).toBe(HIT);
+    expect(e.misses).toBe(0);
+  });
+
+  it('still skips an earlier open note when a later open note is hit', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, open: true },
+        { time: 1.15, open: true },
+      ]),
+      { tempoMap },
+    );
+    e.openDown(1.16);
+    expect(e.state[1]).toBe(HIT);
+    expect(e.state[0]).toBe(MISSED);
+  });
+
+  it('strumming still skips every earlier note', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.1, lane: 1 },
+      ]),
+      { tempoMap, mode: 'strum' },
+    );
+    e.fretDown(1, 1.09);
+    e.strum(1.1);
+    expect(e.state[1]).toBe(HIT);
+    expect(e.state[0]).toBe(MISSED);
+  });
+
+  it('forgives a strum after a hammer-on for 100 ms at most, not the whole wide window', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 1.1, lane: 1, hopo: true },
+        { time: 1.25, lane: 1 },
+      ]),
+      { tempoMap, mode: 'strum' },
+    );
+    e.fretDown(0, 1);
+    e.strum(1);
+    e.fretDown(1, 1.1); // hammer-on
+    e.strum(1.25); // 150 ms later: a real strum for the third note
+    expect(e.state[2]).toBe(HIT);
+  });
+});
+
+describe('saved settings', () => {
+  const store = {};
+  const withStorage = (saved) => {
+    globalThis.localStorage = /** @type {Storage} */ (
+      /** @type {unknown} */ ({
+        getItem: () => (saved === undefined ? null : JSON.stringify(saved)),
+        setItem: (k, v) => (store[k] = v),
+      })
+    );
+  };
+  it('drops a saved hitWindowMs and keeps other values', () => {
+    withStorage({ hitWindowMs: 140, noteSpeed: 1.5 });
+    const loaded = loadSettings();
+    expect(loaded).not.toHaveProperty('hitWindowMs');
+    expect(loaded.timing).toBe('forgiving');
+    expect(loaded.noteSpeed).toBe(1.5);
+  });
+  it('keeps a saved timing choice and repairs an unknown one', () => {
+    withStorage({ timing: 'strict' });
+    expect(loadSettings().timing).toBe('strict');
+    withStorage({ timing: 'nonsense' });
+    expect(loadSettings().timing).toBe('forgiving');
   });
 });
 
@@ -55,7 +276,7 @@ describe('tap mode', () => {
 
   it('misses notes that pass the window', () => {
     const e = new GameEngine(makeNotes([{ time: 1, lane: 0 }]), { tempoMap });
-    e.update(1.2);
+    e.update(1.3);
     expect(e.state[0]).toBe(MISSED);
     expect(e.misses).toBe(1);
   });

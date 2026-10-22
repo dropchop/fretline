@@ -1,6 +1,8 @@
 // Gameplay rules: judging hits and misses, scoring, streaks and star power.
 // Pure logic driven by song time in seconds, so it can be unit tested without audio or rendering.
 
+import { GRADES, GRADE_POINTS, gradeFor, inWindow, timingBands, DEFAULT_TIMING } from './timing.js';
+
 export const PENDING = 0;
 export const HIT = 1;
 export const MISSED = 2;
@@ -12,11 +14,14 @@ const MAX_MULTIPLIER = 4;
 const SP_PER_PHRASE = 0.25;
 const SP_MIN_TO_ACTIVATE = 0.5;
 const SP_BEATS_FOR_FULL_METER = 32;
-/** Hits within this many seconds of the note count as "perfect" for feedback (not scoring). */
-export const PERFECT_WINDOW = 0.025;
+/** A strum right after a hammer-on is forgiven for this long at most, however wide the hit window. */
+const STRUM_LENIENCY = 0.1;
 // Fraction of a perfect run's score (without star power) needed for 1-5 stars.
-// This game's own thresholds, not Clone Hero's. A full combo earns gold stars.
+// This game's own thresholds, not Clone Hero's. Every grade scores a share of the gem's points,
+// so a run of all Good hits is 75% of a perfect run (four stars) and all OK is 50%.
 const STAR_THRESHOLDS = [0.15, 0.35, 0.55, 0.75, 0.9];
+// A full combo earns gold stars from this share of a perfect run (the five-star line) up.
+const GOLD_MIN_RATIO = STAR_THRESHOLDS[4];
 
 const highestBit = (mask) => (mask ? 31 - Math.clz32(mask) : -1);
 
@@ -30,15 +35,17 @@ const highestBit = (mask) => (mask ? 31 - Math.clz32(mask) : -1);
 export class GameEngine {
   /**
    * @param {import('../chart/playable.js').PlayNote[]} notes
-   * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, hitWindow?: number, drums?: boolean}} options
+   * @param {{tempoMap: import('../chart/tempoMap.js').TempoMap, mode?: InputMode, timing?: string, drums?: boolean}} options
    */
-  constructor(notes, { tempoMap, mode = 'tap', hitWindow = 0.1, drums = false }) {
+  constructor(notes, { tempoMap, mode = 'tap', timing = DEFAULT_TIMING, drums = false }) {
     this.notes = notes;
     this.tempoMap = tempoMap;
     // Drums always use tap rules: each pad hit judges its own lane, the kick is an open note.
     this.mode = drums ? 'tap' : mode;
     this.drums = drums;
-    this.hitWindow = hitWindow;
+    /** Half-width of the Perfect, Good, OK and Bad bands in seconds; the last is the hit window. */
+    this.bands = timingBands(timing);
+    this.hitWindow = this.bands[GRADES.length - 1];
     this.state = new Uint8Array(notes.length);
     // Time at which a sustain stopped being held (Infinity while still holding / not started).
     this.sustainDroppedAt = new Float64Array(notes.length).fill(Infinity);
@@ -56,6 +63,8 @@ export class GameEngine {
     this.maxStreak = 0;
     this.hits = 0;
     this.misses = 0;
+    /** Hits per timing grade. */
+    this.gradeCounts = Object.fromEntries(GRADES.map((g) => [g, 0]));
     this.spMeter = 0;
     this.spActive = false;
     /** Hit offsets in seconds (negative = early), in hit order, for timing feedback. */
@@ -154,7 +163,7 @@ export class GameEngine {
     while (this.nextIndex < this.notes.length) {
       const n = this.notes[this.nextIndex];
       if (this.state[n.id] === PENDING) {
-        if (n.time + this.hitWindow >= t) break;
+        if (inWindow(t - n.time, this.bands) || n.time > t) break;
         this.#miss(n, t);
       }
       this.nextIndex++;
@@ -190,12 +199,16 @@ export class GameEngine {
       total,
       accuracy: total ? this.hits / total : 0,
       maxStreak: this.maxStreak,
-      stars: fullCombo ? 6 : STAR_THRESHOLDS.filter((s) => ratio >= s).length,
+      // Gold needs a full combo that was also mostly Perfect and Good, not a string of Bad hits.
+      stars: fullCombo && ratio >= GOLD_MIN_RATIO ? 6 : STAR_THRESHOLDS.filter((s) => ratio >= s).length,
+      grades: { ...this.gradeCounts },
+      windowMs: this.hitWindow * 1000,
+      perfectMs: this.bands[0] * 1000,
       fullCombo,
       offsets,
       meanOffsetMs,
-      early: offsets.filter((o) => o < -PERFECT_WINDOW).length,
-      late: offsets.filter((o) => o > PERFECT_WINDOW).length,
+      early: offsets.filter((o) => o < -this.bands[0]).length,
+      late: offsets.filter((o) => o > this.bands[0]).length,
     };
   }
 
@@ -226,15 +239,21 @@ export class GameEngine {
     this.activeSustains = still;
   }
 
-  /** First pending note in the hit window (in time order) that satisfies `accept`. */
+  /**
+   * The pending note nearest to t (the earlier one on a tie) in the hit window that satisfies
+   * `accept`. With a wide window several notes of a fast run are in reach at once; a tap judges
+   * the one it is closest to, so a late tap for the second note is not spent on the first.
+   */
   #findInWindow(t, accept) {
+    let best = null;
     for (let i = this.nextIndex; i < this.notes.length; i++) {
       const n = this.notes[i];
-      if (n.time - this.hitWindow > t) break;
-      if (this.state[n.id] !== PENDING || n.time + this.hitWindow < t) continue;
-      if (accept(n)) return n;
+      if (!inWindow(t - n.time, this.bands) && n.time > t) break;
+      if (this.state[n.id] !== PENDING || !inWindow(t - n.time, this.bands)) continue;
+      if (!accept(n)) continue;
+      if (!best || Math.abs(t - n.time) < Math.abs(t - best.time)) best = n;
     }
-    return null;
+    return best;
   }
 
   #anyPendingInWindow(t) {
@@ -270,27 +289,32 @@ export class GameEngine {
     const note = this.#findInWindow(t, (n) => n.tap || (n.hopo && this.lastNoteHit));
     if (note && this.#strumMatches(note) && this.held !== 0) {
       this.#hit(note, t);
-      this.strumLeniencyUntil = t + this.hitWindow;
+      this.strumLeniencyUntil = t + Math.min(this.hitWindow, STRUM_LENIENCY);
     }
   }
 
   #hit(note, t) {
-    // Any earlier pending notes were skipped over. Drum gems at the same instant are
-    // separate notes and may be hit in any order, so only earlier ticks count as skipped.
+    // Earlier pending notes were skipped over. When tapping, every lane is its own button and the
+    // window is wide, so a note in another lane is still there to be tapped; only an earlier note
+    // in the same lane (or an earlier open note) was skipped. Strumming has one button: all are.
     for (let i = this.nextIndex; i < note.id; i++) {
-      if (this.state[i] === PENDING && !(this.drums && this.notes[i].tick === note.tick))
-        this.#miss(this.notes[i], t);
+      const earlier = this.notes[i];
+      if (this.state[i] === PENDING && (this.mode === 'strum' || this.#sameLane(earlier, note)))
+        this.#miss(earlier, t);
     }
+    const offset = t - note.time;
+    const grade = gradeFor(offset, this.bands) ?? 'bad';
     this.state[note.id] = HIT;
     this.hits++;
+    this.gradeCounts[grade]++;
     // The multiplier goes up after the 10th note, so score with the current one first.
-    this.score += POINTS_PER_GEM * Math.max(1, note.lanes.length) * this.multiplier;
+    this.score += POINTS_PER_GEM * Math.max(1, note.lanes.length) * GRADE_POINTS[grade] * this.multiplier;
     this.streak++;
     this.maxStreak = Math.max(this.maxStreak, this.streak);
     this.lastNoteHit = true;
     if (note.sustain) this.activeSustains.push({ note, scoredUntil: Math.max(t, note.time) });
-    this.offsets.push(t - note.time);
-    this.events.push({ type: 'hit', note, time: t, offset: t - note.time });
+    this.offsets.push(offset);
+    this.events.push({ type: 'hit', note, time: t, offset, grade });
     if (note.spEnd && !this.brokenPhrases.has(note.spPhrase)) {
       this.spMeter = Math.min(1, this.spMeter + SP_PER_PHRASE);
       this.events.push({ type: 'spGain', time: t });
@@ -301,6 +325,10 @@ export class GameEngine {
     ) {
       this.events.push({ type: 'multiplier', time: t, value: this.multiplier });
     }
+  }
+
+  #sameLane(a, b) {
+    return a.open ? b.open : (a.mask & b.mask) !== 0;
   }
 
   #miss(note, t) {

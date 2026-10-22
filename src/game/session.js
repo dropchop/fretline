@@ -93,7 +93,7 @@ export class GameSession {
     this.engine = new GameEngine(this.notes, {
       tempoMap: this.chart.song.tempoMap,
       mode: this.mode,
-      hitWindow: settings.hitWindowMs / 1000,
+      timing: settings.timing,
       drums: this.drums,
     });
     this.lastNoteEnd = this.notes.reduce((m, n) => Math.max(m, n.endTime), this.range?.start ?? 0);

@@ -1,10 +1,12 @@
 // Player preferences, remembered per device.
+import { DEFAULT_TIMING, TIMING_PRESETS } from './game/timing.js';
+
 const KEY = 'fretline.settings';
 
 export const DEFAULT_SETTINGS = {
   noteSpeed: 1, // multiplier on the base highway speed
   calibrationMs: 0, // positive = audio reaches the player later (e.g. Bluetooth headphones)
-  hitWindowMs: 100, // +/- around each note
+  timing: DEFAULT_TIMING, // key of TIMING_PRESETS: how wide the Perfect/Good/OK/Bad bands are
   noteStyle: 'tiles', // 'tiles' | 'classic'; see render/highway.js NOTE_STYLES
   leftHanded: false,
   inputMode: 'auto', // 'auto' | 'tap' | 'strum'
@@ -19,7 +21,12 @@ export const DEFAULT_SETTINGS = {
 
 export function loadSettings() {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    // The old Hit window slider is gone; its value must not carry over, so every device starts on the new default.
+    delete saved.hitWindowMs;
+    const settings = { ...DEFAULT_SETTINGS, ...saved };
+    if (!(settings.timing in TIMING_PRESETS)) settings.timing = DEFAULT_TIMING;
+    return settings;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
