@@ -736,11 +736,14 @@ body.sp-active #game {
 .judge.perfect {
   color: var(--sp);
 }
-.judge.early {
-  color: var(--b);
+.judge.good {
+  color: var(--g);
 }
-.judge.late {
+.judge.ok {
   color: var(--o);
+}
+.judge.bad {
+  color: var(--r);
 }
 .judge.miss {
   color: var(--danger);

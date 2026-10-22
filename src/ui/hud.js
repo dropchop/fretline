@@ -1,6 +1,6 @@
 // In-game heads-up display (score, multiplier, streak, star power), drawn with DOM elements.
 
-import { PERFECT_WINDOW } from '../game/engine.js';
+import { GRADE_LABELS } from '../game/timing.js';
 
 const STREAK_MILESTONES = new Set([50, 100, 250, 500, 750, 1000]);
 
@@ -76,8 +76,8 @@ export class Hud {
   }
 
   event(ev, engine) {
-    if (ev.type === 'hit') this.judge(ev.offset);
-    if (ev.type === 'miss') this.judge(null);
+    if (ev.type === 'hit') this.judge(ev.grade, ev.offset, engine.bands[0]);
+    if (ev.type === 'miss') this.judge('miss');
     if (ev.type === 'hit' && STREAK_MILESTONES.has(engine.streak))
       this.popup(`${engine.streak} note streak!`);
     if (ev.type === 'spGain' && engine.spMeter >= 0.5 && !engine.spActive)
@@ -87,15 +87,21 @@ export class Hud {
       this.el.mult.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], 250);
   }
 
-  /** Flashes Early / Perfect / Late (or Miss for null) under the score. */
-  judge(offset) {
+  /**
+   * Flashes the grade (Perfect / Good / OK / Bad, or Miss) under the score. Anything past the
+   * Perfect band gets an arrow: up when the tap came early, down when it came late, as the notes fall.
+   * @param {string} grade a timing grade or 'miss'
+   * @param {number} [offset] seconds from the note (negative = early)
+   * @param {number} [perfectBand] half-width of the Perfect band in seconds
+   */
+  judge(grade, offset = 0, perfectBand = 0) {
     const el = this.el.judge;
     if (!el) return;
-    let kind = 'miss';
-    if (offset !== null)
-      kind = Math.abs(offset) <= PERFECT_WINDOW ? 'perfect' : offset < 0 ? 'early' : 'late';
-    el.textContent = { perfect: 'Perfect', early: 'Early', late: 'Late', miss: 'Miss' }[kind];
-    el.className = `judge ${kind}`;
+    const word = GRADE_LABELS[grade] ?? 'Miss';
+    const arrow = grade !== 'miss' && Math.abs(offset) > perfectBand ? (offset < 0 ? '↑' : '↓') : '';
+    el.textContent = arrow ? `${word} ${arrow}` : word;
+    el.title = arrow ? (offset < 0 ? 'early' : 'late') : '';
+    el.className = `judge ${grade}`;
     void el.offsetWidth; // restart the CSS animation
     el.classList.add('show');
   }

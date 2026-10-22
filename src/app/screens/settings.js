@@ -2,6 +2,7 @@
 import { $, show, registerActions } from '../router.js';
 import { settings } from '../state.js';
 import { saveSettings } from '../../settings.js';
+import { TIMING_PRESETS, DEFAULT_TIMING } from '../../game/timing.js';
 import { THEMES, NOTE_STYLES } from '../../render/highway.js';
 
 export function initSettings() {
@@ -18,8 +19,21 @@ export function initSettings() {
   };
   range('noteSpeed', 'noteSpeed', (v) => `${Number(v).toFixed(2)}x`);
   range('calibration', 'calibrationMs', (v) => `${v} ms`);
-  range('hitWindow', 'hitWindowMs', (v) => `±${v} ms`);
   range('volume', 'volume', (v) => `${Math.round(v * 100)}%`);
+  const timing = $('#timing');
+  const timingHelp = $('#timingHelp');
+  const describeTiming = () => {
+    const [p, g, o, b] = TIMING_PRESETS[timing.value].bandsMs;
+    timingHelp.textContent = `Perfect ±${p} ms, Good ±${g}, OK ±${o}, Bad ±${b}. Anything further out misses.`;
+  };
+  for (const [key, t] of Object.entries(TIMING_PRESETS)) timing.append(new Option(t.label, key));
+  timing.value = settings.timing in TIMING_PRESETS ? settings.timing : DEFAULT_TIMING;
+  describeTiming();
+  timing.addEventListener('change', () => {
+    settings.timing = timing.value;
+    describeTiming();
+    saveSettings(settings);
+  });
   const theme = $('#theme');
   for (const [key, t] of Object.entries(THEMES)) theme.append(new Option(t.label, key));
   theme.value = settings.theme in THEMES ? settings.theme : 'classic';
