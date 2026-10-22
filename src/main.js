@@ -8,6 +8,7 @@ import { initSettings } from './app/screens/settings.js';
 import { initCalibration, cancelCalibration } from './app/screens/calibration.js';
 import { initController, cancelControllerMapping } from './app/screens/controller.js';
 import { initProfile } from './app/screens/profile.js';
+import { initFind } from './app/screens/find.js';
 
 initSettings();
 initCalibration();
@@ -16,6 +17,7 @@ initProfile();
 initSetup();
 initPlay();
 initLibrary();
+initFind();
 
 registerActions({
   back: () => {

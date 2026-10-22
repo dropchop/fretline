@@ -852,3 +852,78 @@ body.sp-active #game {
     right: 120px;
   }
 }
+
+/* ---- Find songs ---- */
+#find a {
+  color: var(--accent);
+}
+
+.howto {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 4px;
+}
+
+.find-form {
+  display: flex;
+  gap: 8px;
+}
+
+.find-form input[type='search'] {
+  flex: 1;
+  width: auto;
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+.find-form .btn {
+  flex: none;
+}
+
+#findStatus.error {
+  color: var(--danger);
+}
+
+.find-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.find-results li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #25213a;
+  background: var(--panel);
+}
+
+.find-info .title {
+  display: block;
+  font-weight: 700;
+}
+
+.find-info .artist,
+.find-info .parts {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.find-info .parts {
+  font-size: 0.8rem;
+}
+
+.find-add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.find-legal {
+  margin: 4px 0 0;
+}

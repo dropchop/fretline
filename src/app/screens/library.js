@@ -57,12 +57,13 @@ export function renderLibrary() {
   $('#emptyLibrary').hidden = state.library.length > 0;
 }
 
+/** @returns {Promise<number>} how many songs were added */
 export async function handleImport(fileList) {
-  if (!fileList?.length) return;
+  if (!fileList?.length) return 0;
+  let saved = 0;
   loading('Importing songs…');
   try {
     const { songs, errors } = await importFiles(fileList);
-    let saved = 0;
     for (const pkg of songs) {
       try {
         await saveSong(pkg);
@@ -83,6 +84,7 @@ export async function handleImport(fileList) {
   } finally {
     loading(null);
   }
+  return saved;
 }
 
 async function handleAutoChart(file) {

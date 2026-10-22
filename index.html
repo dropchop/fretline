@@ -43,6 +43,7 @@
             Auto-chart any audio file
             <input type="file" id="audioInput" accept="audio/*,.ogg,.opus,.mp3,.wav,.m4a,.flac" hidden />
           </label>
+          <button class="btn" data-action="find-songs">Find songs</button>
           <button class="btn subtle" data-action="profile">Profile &amp; history</button>
           <button class="btn subtle" data-action="settings">Settings</button>
         </div>
@@ -57,6 +58,44 @@
             notes.mid, song.ini and the audio such as song.ogg).
           </p>
         </div>
+      </section>
+
+      <!-- Find songs: search Chorus Encore -->
+      <section class="screen" id="find">
+        <button class="back" data-action="back">‹ Library</button>
+        <h2>Find songs</h2>
+        <p class="muted">
+          Search by
+          <a href="https://www.enchor.us/" target="_blank" rel="noopener noreferrer">Chorus Encore</a>, the
+          community index of Clone Hero charts.
+        </p>
+        <ol class="howto small muted">
+          <li>Search below and tap <b>Download &amp; add</b>.</li>
+          <li>
+            Or find a chart on
+            <a href="https://www.enchor.us/" target="_blank" rel="noopener noreferrer">enchor.us</a>, download
+            it, then come back and use <b>Add songs</b> on the library screen to pick the file.
+          </li>
+        </ol>
+        <form class="find-form" id="findForm">
+          <input
+            type="search"
+            id="findQuery"
+            placeholder="Song, artist or charter"
+            autocomplete="off"
+            enterkeyhint="search"
+            aria-label="Search Chorus Encore"
+          />
+          <button class="btn primary" type="submit">Search</button>
+        </form>
+        <p class="muted small" id="findStatus" role="status" aria-live="polite"></p>
+        <ul class="find-results" id="findResults"></ul>
+        <button class="btn subtle" id="findMore" hidden>Show more</button>
+        <p class="muted small find-legal">
+          Charts come from Chorus Encore and are made by third parties. They can include copyrighted music;
+          you are responsible for what you download and for having the right to use it. Fretline only asks
+          Chorus Encore when you search or tap Download, and keeps what you download on this device.
+        </p>
       </section>
 
       <!-- Song setup: instrument / difficulty -->
