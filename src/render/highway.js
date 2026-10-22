@@ -62,6 +62,14 @@ export const NOTE_STYLES = { tiles: 'Tiles', classic: 'Classic' };
 
 const FAR_Z = 20; // second sample row for the touch columns (world units up the highway)
 
+// Portrait camera. A steep, narrow-angle view keeps the lanes nearly as wide at the top of the screen
+// as at the strikeline, so there is room for a thumb on every lane the whole way up; the price is
+// that fewer seconds of notes fit on screen (see README, "Highway view").
+const PORTRAIT_FOV = 35;
+const PORTRAIT_PITCH = 65; // degrees down from horizontal; 90 would look straight down
+const PORTRAIT_EDGE_NDC = 0.98; // the outer lane edge, as a share of the half screen width
+const LOOKAHEAD_MARGIN = 2; // world units drawn beyond the top of the screen
+
 /** Where the strikeline should sit, as a fraction of screen height from the top. */
 const STRIKELINE_SCREEN_Y = 0.8;
 
@@ -370,13 +378,13 @@ export class HighwayRenderer {
     const aspect = width / height;
     const cam = this.camera;
     cam.aspect = aspect;
-    cam.fov = aspect < 1 ? 62 : 50;
+    cam.fov = aspect < 1 ? PORTRAIT_FOV : 50;
     cam.updateProjectionMatrix();
 
     // Highway half-width on screen in NDC: almost full width in portrait, narrower in landscape.
-    const targetX = Math.min(0.94, (0.62 * height) / width);
+    const targetX = Math.min(PORTRAIT_EDGE_NDC, (0.62 * height) / width);
     const targetY = 1 - 2 * STRIKELINE_SCREEN_Y;
-    const pitch = THREE.MathUtils.degToRad(aspect < 1 ? 50 : 32);
+    const pitch = THREE.MathUtils.degToRad(aspect < 1 ? PORTRAIT_PITCH : 32);
     let dist = 8;
     let ahead = 6;
     const edge = new THREE.Vector3();
@@ -390,11 +398,23 @@ export class HighwayRenderer {
       edge.set(0, 0, 0).project(cam);
       ahead += (edge.y - targetY) * dist * 0.5;
     }
-    // Fade notes in near the far end of the visible highway.
-    const far = cam.position.distanceTo(new THREE.Vector3(0, 0, -Math.min(HIGHWAY_LENGTH - 6, dist * 3.2)));
-    this.fog.near = far * 0.55;
-    this.fog.far = far;
-    this.lookahead = Math.min(HIGHWAY_LENGTH - 6, dist * 3.2) / this.speed; // seconds of notes to draw
+    // Draw notes as far up the highway as the screen shows (plus a little, so they slide in from
+    // the edge), and fade them near that end. A far camera has a long highway in view, so the
+    // distance is also capped by the camera distance.
+    const seen = aspect < 1 ? this.#screenTopZ() + LOOKAHEAD_MARGIN : Infinity;
+    const reach = Math.min(HIGHWAY_LENGTH - 6, dist * 3.2, seen);
+    const far = cam.position.distanceTo(new THREE.Vector3(0, 0, -reach));
+    this.fog.near = aspect < 1 ? dist * 1.2 : far * 0.55;
+    this.fog.far = aspect < 1 ? far * 1.3 : far;
+    this.lookahead = reach / this.speed; // seconds of notes to draw
+  }
+
+  /** How far up the highway (world units from the strikeline) the top edge of the screen sees. */
+  #screenTopZ() {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(0, 1), this.camera);
+    const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+    return hit ? -hit.z : Infinity;
   }
 
   /** Screen-space geometry (CSS px) of the lanes, for aligning touch controls. See TouchLayout. */
