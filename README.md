@@ -6,6 +6,10 @@ built-in generated demo song so it works out of the box.
 
 - **3D highway** rendered with [Three.js](https://threejs.org/) (WebGL on an HTML5 `<canvas>`).
   The camera auto-fits so the five frets span a portrait screen, with the strikeline under your thumbs.
+  - **Highway view:** in portrait the camera is steep (65° down, 35° field of view), so the lanes stay wide
+    all the way up the screen (at 390×844 a lane is 75 px at the strikeline and 56 px at a fifth of the way
+    down from the top, against 72 and 15 px before). The price is time: the top of the screen shows about
+    1.6 s of notes at the default note speed, so lower Note speed if you want more warning.
 - **Note styles** (Settings → Note style): **Tiles** (default) draws each note as a tall rectangle that fills its
   lane, Piano Tiles style, and **Classic** draws the round gems over fret rings. Both play the same five lanes,
   so Clone Hero charts work unchanged.
@@ -18,18 +22,38 @@ built-in generated demo song so it works out of the box.
   `Shift` or `Q` for Star Power, `Esc` to pause. HOPOs and taps can be hammered on without strumming.
 - **Clone Hero charts:** `.chart` and `.mid` charts; guitar, bass, rhythm, co-op and keys parts; all four difficulties;
   chords, sustains, HOPOs (natural and forced), tap notes, open notes, Star Power phrases, `song.ini` metadata and album art.
-- **Scoring:** 50 points per gem, 1x–4x multiplier every 10-note streak, sustain points, Star Power doubles the
-  multiplier, guitar track muted on misses, star rating and results screen.
+- **Timing grades:** every hit is graded by how far it was from the note: **Perfect**, **Good**, **OK** or
+  **Bad**, worth 100 / 75 / 50 / 25 % of the gem's points. All four grades keep the streak and count towards
+  the multiplier; only a note that is missed or never tapped breaks it. Settings → **Timing** sets how wide
+  the bands are (± around the note):
+
+  | Timing                | Perfect | Good  | OK     | Bad (hit window) |
+  | --------------------- | ------- | ----- | ------ | ---------------- |
+  | Forgiving _(default)_ | 40 ms   | 80 ms | 130 ms | 200 ms           |
+  | Normal                | 20 ms   | 40 ms | 65 ms  | 100 ms           |
+  | Strict                | 14 ms   | 28 ms | 46 ms  | 70 ms            |
+
+  A tap judges the note nearest to it in time, so in a fast run of one lane a late tap is not spent on the
+  note before. When tapping, a later note that is hit first only skips earlier notes in its own lane; notes
+  in other lanes can still be tapped until their own window ends.
+
+- **Scoring:** 50 points per gem (times the grade's share), 1x–4x multiplier every 10-note streak, sustain
+  points, Star Power doubles the multiplier, guitar track muted on misses, star rating and results screen.
+  Stars compare your score with a run of all Perfects (15 / 35 / 55 / 75 / 90 %), so all Good is four stars
+  and all OK is two. Gold stars need a full combo that is also at least 90 % of a perfect run.
 - **Song library** stored on the device (IndexedDB), so songs stay after reloading.
-- **Settings:** note style, note speed, audio latency calibration (with a tap-along calibrator), hit window
-  (±100 ms by default), volume, left-handed mode, controls mode.
+- **Settings:** note style, note speed, audio latency calibration (with a tap-along calibrator), timing
+  (Forgiving / Normal / Strict), volume, left-handed mode, controls mode. The old Hit window slider is gone;
+  a value saved by it is ignored, so every device starts on Forgiving.
 - Installable as a full-screen, portrait-locked home-screen app, and playable offline after the first visit.
 - **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
 - **Practice mode:** pick a section of the song and/or slow it down (50–100%). Practice runs aren't recorded.
 - **Drums:** 4-pad + kick drum charts from `.chart` and `.mid` (cymbals shown flat), with touch pads, Space / strum = kick.
 - **Auto-chart any audio file:** pick an MP3/OGG/etc. and the game detects the tempo and hits (spectral-flux onsets,
   grid-fitted beats) and writes a four-difficulty chart. Results depend on how clear the beat is.
-- **Timing feedback:** Early / Perfect / Late on every hit, a timing histogram and advice on the results screen.
+- **Timing feedback:** the grade flashes after every hit (with an ↑ for early or ↓ for late past the Perfect
+  band, as the notes fall), and the results screen shows hits per grade, early / late counts, a timing
+  histogram and calibration advice.
 - **Profile & history:** lifetime totals, an accuracy sparkline and recent plays.
 - **Pass & play versus:** two players take turns on one phone; the results screen names the winner.
 - **Tilt Star Power:** flick the phone to activate Star Power (DeviceOrientation; iOS asks for motion access).
@@ -89,6 +113,7 @@ Files app previews HTML without running scripts, so open the file in Safari via 
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `src/chart/`            | `.chart`, `.mid` and `song.ini` parsers, tempo map, conversion into timed notes (chords, HOPOs, Star Power) |
 | `src/game/engine.js`    | Gameplay rules: hit/miss judging, scoring, streak, multiplier, sustains, Star Power                         |
+| `src/game/timing.js`    | Timing grades: the Perfect / Good / OK / Bad bands per Timing setting and the points for each               |
 | `src/game/session.js`   | One play-through: connects audio clock, engine, renderer, HUD and controls                                  |
 | `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting                                 |
 | `src/audio/player.js`   | Multi-stem Web Audio playback; latency-corrected song clock                                                 |
