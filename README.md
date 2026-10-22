@@ -54,13 +54,18 @@ built-in generated demo song so it works out of the box.
   - sends a request only when you submit a search, pause typing for 0.8 s (3 or more characters) or tap Download,
     and never polls, prefetches or refreshes in the background;
   - remembers each search for the session, so repeating it costs no request;
-  - sends at most 10 requests in any 60 seconds, at least 1 second apart (the site allows about 50), by refusing
-    the extra ones with a message rather than queueing them;
+  - sends at most 10 searches or downloads in any 60 seconds, at least 1 second apart, by refusing the extra ones
+    with a message rather than queueing them (a browser also sends a preflight request before each search, so
+    that is up to 20 HTTP requests, still well under the roughly 50 the site allows);
   - after a 429 or a 5xx error, makes no requests for 5 s, then 10, 20, 40, 80 and 120 s while it keeps failing
     (or the server's `Retry-After`, up to 120 s), never retries by itself and says so;
   - fetches songs straight from Chorus Encore into your browser. Nothing is proxied, hosted or cached on our side.
-    Search results are 8 per page; "Show more" asks for the next page. The API is undocumented: replies are checked,
-    and a changed shape shows an error instead of nonsense.
+    Search results are 8 per page; "Show more" asks for the next page (one request at a time, and a page that
+    fails is asked for again rather than skipped). Songs over 100 MB are refused; the download is counted as it
+    arrives, then handed to the importer as a file, which holds about three copies of it while it unpacks, the
+    same as adding that .sng by hand. The API is undocumented: replies are checked, and a changed shape shows
+    an error instead of nonsense. A chart whose rating skips guitar but whose notes include it still shows as
+    playable.
 - **Song library** stored on the device (IndexedDB), so songs stay after reloading.
 - **Settings:** note style, note speed, audio latency calibration (with a tap-along calibrator), timing
   (Forgiving / Normal / Strict), volume, left-handed mode, controls mode. The old Hit window slider is gone;

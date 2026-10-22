@@ -15,6 +15,7 @@ import {
   fileUrl,
   parseChart,
 } from '../src/library/encore.js';
+import { ResultList } from '../src/library/encoreResults.js';
 import recorded from './fixtures/enchor-search.json';
 
 // A real search reply (three hits for "test"), trimmed to the fields the client reads.
@@ -54,7 +55,7 @@ describe('search', () => {
       artist: 'Chroma',
       charter: 'Xeratek',
       lengthMs: 136574,
-      parts: [{ label: 'Guitar', level: 4 }],
+      parts: [{ label: 'Guitar', level: 4, notes: 895 }],
     });
   });
 
@@ -100,6 +101,21 @@ describe('search', () => {
     await expect(client.search('x')).resolves.toMatchObject({ cached: false });
   });
 
+  it('shows a chart the rating skipped but whose notes are there, from notesData', () => {
+    // "Insanisanity (Test)" in the recorded reply has diff_guitar -1 and 805 expert guitar notes.
+    const chart = parseChart(fixture.data[2]);
+    expect(chart.parts).toEqual([{ label: 'Guitar', level: null, notes: 805 }]);
+    // A rated part keeps its level and also gets the note count.
+    expect(parseChart(fixture.data[0]).parts).toEqual([{ label: 'Guitar', level: 4, notes: 895 }]);
+    // Parts this game can't play (6-fret, vocals) never show, even when listed.
+    const odd = parseChart({
+      md5: MD5,
+      name: 'x',
+      notesData: { instruments: ['guitarghl', 'vocals', 'drums'], noteCounts: [] },
+    });
+    expect(odd.parts).toEqual([{ label: 'Drums', level: null, notes: 0 }]);
+  });
+
   it('parses a chart with several parts and skips 6-fret parts', () => {
     const chart = parseChart({
       md5: MD5.toUpperCase(),
@@ -113,8 +129,8 @@ describe('search', () => {
     expect(chart.name).toBe('Song');
     expect(chart.artist).toBe('Unknown Artist');
     expect(chart.parts).toEqual([
-      { label: 'Guitar', level: 3 },
-      { label: 'Drums', level: 0 },
+      { label: 'Guitar', level: 3, notes: 0 },
+      { label: 'Drums', level: 0, notes: 0 },
     ]);
     expect(parseChart({ md5: 'short', name: 'x' })).toBeNull();
   });
@@ -187,6 +203,21 @@ describe('back-off', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('says "slow down" only for a 429; a server error is described as an error', async () => {
+    const { client: c429, clock: k429 } = setup(() => new Response('', { status: 429 }));
+    await c429.search('a').catch(() => {});
+    k429.t += 1000;
+    expect((await c429.search('b').catch((e) => e)).message).toMatch(/asked us to slow down/);
+    const { client: c503, clock: k503 } = setup(() => new Response('', { status: 503 }));
+    const first = await c503.search('a').catch((e) => e);
+    expect(first.message).toMatch(/had a problem \(error 503\)/);
+    k503.t += 1000;
+    const during = await c503.search('b').catch((e) => e);
+    expect(during.message).toMatch(/error a moment ago/);
+    expect(during.message).not.toMatch(/slow down/);
+    expect(during.status).toBe(503);
+  });
+
   it('doubles the pause for each failure in a row, up to a cap, and resets after a success', async () => {
     let fail = true;
     const { client, clock } = setup(() => (fail ? new Response('', { status: 503 }) : json(fixture)));
@@ -234,7 +265,7 @@ describe('download', () => {
     const buf = await client.download(MD5);
     expect(fetch.mock.calls[0][0]).toBe(fileUrl(MD5));
     expect(fetch.mock.calls[0][0]).toBe(`https://files.enchor.us/${MD5}.sng`);
-    expect([...new Uint8Array(buf)]).toEqual([83, 78, 71, 80, 75, 71]);
+    expect([...new Uint8Array(await buf.arrayBuffer())]).toEqual([83, 78, 71, 80, 75, 71]);
   });
 
   it('reports progress when the size is known', async () => {
@@ -242,7 +273,7 @@ describe('download', () => {
     const { client } = setup(() => new Response(bytes, { headers: { 'content-length': '1000' } }));
     const seen = [];
     const buf = await client.download(MD5, (f) => seen.push(f));
-    expect(buf.byteLength).toBe(1000);
+    expect(buf.size).toBe(1000);
     expect(seen[seen.length - 1]).toBe(1);
   });
 
@@ -252,6 +283,44 @@ describe('download', () => {
         new Response(new Uint8Array(4), { headers: { 'content-length': String(MAX_DOWNLOAD_BYTES + 1) } }),
     );
     await expect(client.download(MD5)).rejects.toMatchObject({ kind: 'too-big' });
+  });
+
+  it('counts the bytes as they arrive, so the cap holds with no Content-Length', async () => {
+    const chunk = new Uint8Array(400);
+    let pulled = 0;
+    const stream = new ReadableStream({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(chunk);
+        if (pulled > 100) controller.close(); // a runaway reply: the client has to be the one to stop
+      },
+    });
+    const clock = { t: 1_000_000 };
+    const fetch = vi.fn(async () => new Response(stream));
+    const client = new EncoreClient({ fetch, now: () => clock.t, maxBytes: 1000 });
+    await expect(client.download(MD5)).rejects.toMatchObject({ kind: 'too-big' });
+    expect(pulled).toBeLessThan(10);
+  });
+
+  it('accepts a streamed reply under the cap with no Content-Length', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(300));
+        controller.enqueue(new Uint8Array(300));
+        controller.close();
+      },
+    });
+    const clock = { t: 1_000_000 };
+    const client = new EncoreClient({
+      fetch: async () => new Response(stream),
+      now: () => clock.t,
+      maxBytes: 1000,
+    });
+    expect((await client.download(MD5)).size).toBe(600);
+  });
+
+  it('is capped at 100 MB', () => {
+    expect(MAX_DOWNLOAD_BYTES).toBe(100 * 1024 * 1024);
   });
 
   it('refuses an id that is not an md5, without a request', async () => {
@@ -335,5 +404,137 @@ describe('no request without a user action', () => {
 
   it('types at least half a second apart', () => {
     expect(TYPING_DELAY_MS).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe('the result list and Show more', () => {
+  /** Pages of 8 charts named P<page>-<n>; 40 found. */
+  const pageBody = (page) => ({
+    found: 40,
+    page,
+    data: Array.from({ length: 8 }, (_, i) => ({
+      md5: String(page).padStart(2, '0') + String(i).padStart(30, '0'),
+      name: `P${page}-${i}`,
+      diff_guitar: 1,
+    })),
+  });
+  const names = (list) => list.charts.map((c) => c.name);
+  const pagesOf = (list) => [...new Set(names(list).map((n) => n.split('-')[0]))];
+
+  /** A client whose fetch answers by the requested page, and can be told to fail or to wait. */
+  function listSetup() {
+    const clock = { t: 1_000_000 };
+    const control = { fail: new Set(), gate: null };
+    const requested = [];
+    const fetch = vi.fn(async (/** @type {string} */ _url, /** @type {RequestInit} */ init = {}) => {
+      const { page } = JSON.parse(String(init.body));
+      requested.push(page);
+      if (control.gate) await control.gate;
+      if (control.fail.has(page)) return new Response('', { status: 503 });
+      return json(pageBody(page));
+    });
+    const client = new EncoreClient({ fetch, now: () => clock.t });
+    return { list: new ResultList(client), clock, control, requested };
+  }
+
+  it('adds pages in order', async () => {
+    const { list, clock } = listSetup();
+    await list.search('x');
+    expect(list.page).toBe(1);
+    expect(list.hasMore).toBe(true);
+    clock.t += MIN_GAP_MS;
+    expect(await list.more()).toBe(true);
+    expect(pagesOf(list)).toEqual(['P1', 'P2']);
+    expect(list.page).toBe(2);
+  });
+
+  it('ignores a second tap while Show more is in flight, so the page that is coming is not thrown away', async () => {
+    const { list, clock, control, requested } = listSetup();
+    await list.search('x');
+    clock.t += MIN_GAP_MS;
+    /** @type {(value?: unknown) => void} */
+    let open = () => {};
+    control.gate = new Promise((resolve) => (open = resolve));
+    const first = list.more();
+    clock.t += MIN_GAP_MS;
+    const second = list.more();
+    expect(await second).toBe(false);
+    expect(list.busy).toBe(true);
+    open();
+    expect(await first).toBe(true);
+    expect(requested).toEqual([1, 2]);
+    expect(pagesOf(list)).toEqual(['P1', 'P2']);
+    // The next tap asks for page 3, not page 4.
+    control.gate = null;
+    clock.t += MIN_GAP_MS;
+    await list.more();
+    expect(requested).toEqual([1, 2, 3]);
+    expect(pagesOf(list)).toEqual(['P1', 'P2', 'P3']);
+  });
+
+  it('asks for the same page again after a refused request, with no gap', async () => {
+    const { list, clock, requested } = listSetup();
+    await list.search('x');
+    // Tapped less than a second after the search: the client refuses without a request.
+    await expect(list.more()).rejects.toMatchObject({ kind: 'throttled' });
+    expect(list.page).toBe(1);
+    expect(list.busy).toBe(false);
+    expect(requested).toEqual([1]);
+    clock.t += MIN_GAP_MS;
+    await list.more();
+    expect(requested).toEqual([1, 2]);
+    expect(pagesOf(list)).toEqual(['P1', 'P2']);
+  });
+
+  it('asks for the same page again after a 503 and its back-off, with no gap', async () => {
+    const { list, clock, control, requested } = listSetup();
+    await list.search('x');
+    clock.t += MIN_GAP_MS;
+    control.fail.add(2);
+    await expect(list.more()).rejects.toMatchObject({ kind: 'backoff', status: 503 });
+    expect(list.page).toBe(1);
+    expect(pagesOf(list)).toEqual(['P1']);
+    // During the pause nothing is sent, and the page still has not moved.
+    clock.t += BACKOFF_BASE_MS - 1;
+    await expect(list.more()).rejects.toMatchObject({ kind: 'backoff' });
+    expect(requested).toEqual([1, 2]);
+    clock.t += 1;
+    control.fail.clear();
+    await list.more();
+    expect(requested).toEqual([1, 2, 2]);
+    expect(pagesOf(list)).toEqual(['P1', 'P2']);
+    expect(list.charts).toHaveLength(16);
+  });
+
+  it('drops a page that arrives after a newer search replaced the list', async () => {
+    const { list, clock, control } = listSetup();
+    await list.search('x');
+    clock.t += MIN_GAP_MS;
+    /** @type {(value?: unknown) => void} */
+    let open = () => {};
+    control.gate = new Promise((resolve) => (open = resolve));
+    const late = list.more();
+    clock.t += MIN_GAP_MS;
+    control.gate = null;
+    await list.search('y');
+    open();
+    expect(await late).toBe(false);
+    expect(pagesOf(list)).toEqual(['P1']);
+    expect(list.query).toBe('y');
+    expect(list.charts).toHaveLength(8);
+    expect(list.busy).toBe(false);
+  });
+
+  it('has no more once everything found is shown, and ignores Show more then', async () => {
+    const { list, clock, requested } = listSetup();
+    await list.search('x');
+    for (let p = 2; p <= 5; p++) {
+      clock.t += MIN_GAP_MS;
+      await list.more();
+    }
+    expect(list.charts).toHaveLength(40);
+    expect(list.hasMore).toBe(false);
+    expect(await list.more()).toBe(false);
+    expect(requested).toEqual([1, 2, 3, 4, 5]);
   });
 });
