@@ -154,10 +154,10 @@ await withServer(async () => {
   await page.fill('#findQuery', 'te'); // too short for a typing search
   await page.waitForTimeout(1500);
   assert(enchor.searches.length === 0, 'opening Find songs and typing a short query sends no request');
+  // Typing "test" and pausing searches once, with no submit.
   await page.fill('#findQuery', 'test');
-  await page.tap('#findForm button[type=submit]');
   await page.waitForFunction(() => document.querySelectorAll('#findResults li').length === 3);
-  assert(enchor.searches.length === 1, `one search sent, got ${enchor.searches.length}`);
+  assert(enchor.searches.length === 1, `one search sent by the typing pause, got ${enchor.searches.length}`);
   assert(
     JSON.stringify(enchor.searches[0]) === JSON.stringify({ search: 'test', per_page: 8, page: 1 }),
     `search body, got ${JSON.stringify(enchor.searches[0])}`,
@@ -167,6 +167,11 @@ await withServer(async () => {
   await page.tap('#findForm button[type=submit]'); // the same query again comes from the session cache
   await page.waitForTimeout(300);
   assert(enchor.searches.length === 1, 'a repeated search is answered from the cache');
+  await page.waitForTimeout(1100); // the client keeps one second between requests
+  await page.fill('#findQuery', 'ab'); // too short to search by typing; a submit searches at once
+  await page.tap('#findForm button[type=submit]');
+  await page.waitForFunction(() => /for “ab”/.test(document.querySelector('#findStatus').textContent));
+  assert(enchor.searches.length === 2, `a submit sends a search, got ${enchor.searches.length}`);
   await page.waitForTimeout(1100); // the client keeps one second between requests
   await page.locator('#findResults .find-add').first().tap();
   await page.waitForFunction(
