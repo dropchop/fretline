@@ -25,7 +25,7 @@ export function loadSettings() {
     // The old Hit window slider is gone; its value must not carry over, so every device starts on the new default.
     delete saved.hitWindowMs;
     const settings = { ...DEFAULT_SETTINGS, ...saved };
-    if (!(settings.timing in TIMING_PRESETS)) settings.timing = DEFAULT_TIMING;
+    if (!Object.hasOwn(TIMING_PRESETS, settings.timing)) settings.timing = DEFAULT_TIMING;
     return settings;
   } catch {
     return { ...DEFAULT_SETTINGS };

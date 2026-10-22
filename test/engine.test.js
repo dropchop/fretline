@@ -139,7 +139,7 @@ describe('timing grades', () => {
 });
 
 describe('judging inside a wide window', () => {
-  it('judges the nearest note of a same-lane run, not the first one in reach', () => {
+  it('moves a Bad-late tap on to the next note of a run when that one is closer', () => {
     const e = new GameEngine(
       makeNotes([
         { time: 1, lane: 0 },
@@ -148,12 +148,15 @@ describe('judging inside a wide window', () => {
       ]),
       { tempoMap },
     );
-    e.fretDown(0, 1.13); // 130 ms after note 0, 10 ms after note 1
+    e.fretDown(0, 1.18); // 180 ms after note 0 (Bad), 60 ms after note 1 (Good)
     expect(e.state[1]).toBe(HIT);
-    expect(e.takeEvents().find((ev) => ev.type === 'hit')).toMatchObject({ grade: 'perfect' });
-    // The first note of the run was skipped over.
+    expect(e.takeEvents().find((ev) => ev.type === 'hit')).toMatchObject({ grade: 'good' });
+    // The first note of the run was skipped over, and the rest are still graded against their own notes.
     expect(e.state[0]).toBe(MISSED);
     expect(e.state[2]).toBe(0);
+    e.fretUp(0, 1.19);
+    e.fretDown(0, 1.25);
+    expect(e.takeEvents().find((ev) => ev.type === 'hit')).toMatchObject({ grade: 'perfect' });
   });
 
   it('judges the earlier note when a tap is exactly between two', () => {
@@ -457,5 +460,130 @@ describe('star power', () => {
     e.fretDown(0, 2);
     expect(e.spMeter).toBe(0);
     expect(e.activateStarPower(2.5)).toBe(false);
+  });
+});
+
+describe('runs played late, as they were judged with a fixed window', () => {
+  const states = (e) => [...e.state].map((x) => (x === HIT ? 'H' : x === MISSED ? 'M' : '.')).join('');
+  for (const timing of ['normal', 'forgiving']) {
+    it(`P3: a same-lane run 100 ms apart, every tap 60 ms late, keeps every note (${timing})`, () => {
+      const specs = Array.from({ length: 8 }, (_, i) => ({ time: 1 + i * 0.1, lane: 2 }));
+      const e = new GameEngine(makeNotes(specs), { tempoMap, timing });
+      specs.forEach((s) => {
+        e.fretDown(2, s.time + 0.06);
+        e.fretUp(2, s.time + 0.07);
+      });
+      e.update(10);
+      expect(states(e)).toBe('HHHHHHHH');
+      expect(e.stats().offsets.every((o) => Math.abs(o - 0.06) < 1e-9)).toBe(true);
+    });
+
+    it(`P1: a chord repeated 100 ms later, fingers 40 and 60 ms late, keeps both (${timing})`, () => {
+      const e = new GameEngine(
+        makeNotes([
+          { time: 1, lanes: [0, 1] },
+          { time: 1.1, lanes: [0, 1] },
+        ]),
+        { tempoMap, timing },
+      );
+      e.fretDown(0, 1.04);
+      e.fretDown(1, 1.06);
+      e.fretUp(0, 1.08);
+      e.fretUp(1, 1.08);
+      e.fretDown(0, 1.14);
+      e.fretDown(1, 1.16);
+      e.update(10);
+      expect(states(e)).toBe('HH');
+    });
+
+    it(`P2: a chord and then a shared-lane single 80 ms later keep both (${timing})`, () => {
+      const e = new GameEngine(
+        makeNotes([
+          { time: 1, lanes: [0, 1] },
+          { time: 1.08, lane: 1 },
+        ]),
+        { tempoMap, timing },
+      );
+      e.fretDown(0, 1.03);
+      e.fretDown(1, 1.045);
+      e.fretUp(0, 1.07);
+      e.fretUp(1, 1.07);
+      e.fretDown(1, 1.1);
+      e.update(10);
+      expect(states(e)).toBe('HH');
+    });
+
+    it(`P7: strumming a chord three times, 100 ms apart and 60 ms late, keeps all three (${timing})`, () => {
+      const specs = [1, 1.1, 1.2].map((time) => ({ time, lanes: [0, 1] }));
+      const e = new GameEngine(makeNotes(specs), { tempoMap, mode: 'strum', timing });
+      e.fretDown(0, 0.9);
+      e.fretDown(1, 0.9);
+      for (const s of specs) e.strum(s.time + 0.06);
+      e.update(10);
+      expect(states(e)).toBe('HHH');
+    });
+  }
+});
+
+describe('star power phrases with notes in several lanes', () => {
+  const phrase = () =>
+    makeNotes([
+      { time: 1, lane: 0, sp: 0 },
+      { time: 1.05, lane: 3, sp: 0, spEnd: true },
+    ]);
+
+  it('does not pay a phrase whose earlier note in another lane is never hit', () => {
+    const e = new GameEngine(phrase(), { tempoMap });
+    e.fretDown(3, 1.05);
+    expect(e.spMeter).toBe(0); // still waiting on the lane 0 note
+    e.update(5);
+    expect(e.state[0]).toBe(MISSED);
+    expect(e.spMeter).toBe(0);
+    expect(e.takeEvents().map((ev) => ev.type)).not.toContain('spGain');
+  });
+
+  it('pays the phrase once the earlier note is hit too, even after the last one', () => {
+    const e = new GameEngine(phrase(), { tempoMap });
+    e.fretDown(3, 1.05);
+    e.fretDown(0, 1.1);
+    expect(e.spMeter).toBeCloseTo(0.25);
+    expect(e.takeEvents().filter((ev) => ev.type === 'spGain')).toHaveLength(1);
+  });
+
+  it('pays a phrase hit in order exactly once', () => {
+    const e = new GameEngine(phrase(), { tempoMap });
+    e.fretDown(0, 1);
+    e.fretDown(3, 1.05);
+    expect(e.spMeter).toBeCloseTo(0.25);
+  });
+});
+
+describe('stray presses', () => {
+  const run = (offsetOfStray) => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lane: 0 },
+        { time: 2, lane: 0 },
+      ]),
+      { tempoMap },
+    );
+    e.fretDown(0, 1);
+    e.fretUp(0, 1.01);
+    e.fretDown(4, 2 + offsetOfStray);
+    return e;
+  };
+  it('only break the streak with a note within 100 ms, as before the window grew', () => {
+    expect(run(-0.15).streak).toBe(1);
+    expect(run(-0.09).streak).toBe(0);
+  });
+});
+
+describe('saved timing names', () => {
+  it('rejects names that are only inherited from Object', () => {
+    expect(new GameEngine([], { tempoMap, timing: 'toString' }).hitWindow).toBeCloseTo(0.2);
+    globalThis.localStorage = /** @type {Storage} */ (
+      /** @type {unknown} */ ({ getItem: () => JSON.stringify({ timing: 'toString' }), setItem: () => {} })
+    );
+    expect(loadSettings().timing).toBe('forgiving');
   });
 });

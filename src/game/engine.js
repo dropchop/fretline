@@ -16,6 +16,8 @@ const SP_MIN_TO_ACTIVATE = 0.5;
 const SP_BEATS_FOR_FULL_METER = 32;
 /** A strum right after a hammer-on is forgiven for this long at most, however wide the hit window. */
 const STRUM_LENIENCY = 0.1;
+/** A stray press only counts as an overhit (and breaks the streak) with a note this close, as before the window grew. */
+const OVERHIT_WINDOW = 0.1;
 // Fraction of a perfect run's score (without star power) needed for 1-5 stars.
 // This game's own thresholds, not Clone Hero's. Every grade scores a share of the gem's points,
 // so a run of all Good hits is 75% of a perfect run (four stars) and all OK is 50%.
@@ -46,11 +48,14 @@ export class GameEngine {
     /** Half-width of the Perfect, Good, OK and Bad bands in seconds; the last is the hit window. */
     this.bands = timingBands(timing);
     this.hitWindow = this.bands[GRADES.length - 1];
+    this.overhitWindow = Math.min(this.hitWindow, OVERHIT_WINDOW);
     this.state = new Uint8Array(notes.length);
     // Time at which a sustain stopped being held (Infinity while still holding / not started).
     this.sustainDroppedAt = new Float64Array(notes.length).fill(Infinity);
     this.activeSustains = [];
     this.brokenPhrases = new Set();
+    /** Phrases whose last note was hit while an earlier note of theirs is still pending: phrase -> last note. */
+    this.deferredPhrases = new Map();
     this.held = 0; // bitmask of frets currently down
     this.openHeld = false; // touch: finger on the strum area (for open notes)
     this.nextIndex = 0; // every note before this has been judged
@@ -124,7 +129,7 @@ export class GameEngine {
     const effective = this.held & ~this.sustainingMask;
     const note = this.#findInWindow(t, (n) => n.open && (this.drums || effective === 0));
     if (note) this.#hit(note, t);
-    else if (this.drums && this.#anyPendingInWindow(t)) this.#overhit(t);
+    else if (this.drums && this.#anyPendingNear(t)) this.#overhit(t);
   }
 
   openUp(t) {
@@ -240,31 +245,45 @@ export class GameEngine {
   }
 
   /**
-   * The pending note nearest to t (the earlier one on a tie) in the hit window that satisfies
-   * `accept`. With a wide window several notes of a fast run are in reach at once; a tap judges
-   * the one it is closest to, so a late tap for the second note is not spent on the first.
+   * The pending note in the hit window that satisfies `accept` which a press at t judges: the
+   * earliest one, as long as it would grade OK or better. Only when the earliest is late enough to
+   * be a Bad hit, and a later note in reach is closer, does the press go to that later note; so a
+   * run played steadily a little late keeps every note, while a note that was plainly skipped does
+   * not drag the rest of the run onto the wrong notes.
    */
   #findInWindow(t, accept) {
-    let best = null;
+    let first = null;
+    let nearest = null;
     for (let i = this.nextIndex; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (!inWindow(t - n.time, this.bands) && n.time > t) break;
       if (this.state[n.id] !== PENDING || !inWindow(t - n.time, this.bands)) continue;
       if (!accept(n)) continue;
-      if (!best || Math.abs(t - n.time) < Math.abs(t - best.time)) best = n;
+      first ??= n;
+      if (!nearest || Math.abs(t - n.time) < Math.abs(t - nearest.time)) nearest = n;
     }
-    return best;
+    return first && gradeFor(t - first.time, this.bands) !== 'bad' ? first : nearest;
   }
 
   #anyPendingInWindow(t) {
     return this.#findInWindow(t, () => true);
   }
 
+  /** A press that hits nothing only breaks the streak when a note is this close (see OVERHIT_WINDOW). */
+  #anyPendingNear(t) {
+    for (let i = this.nextIndex; i < this.notes.length; i++) {
+      const n = this.notes[i];
+      if (n.time - t > this.overhitWindow) break;
+      if (this.state[n.id] === PENDING && t - n.time <= this.overhitWindow) return true;
+    }
+    return false;
+  }
+
   #tapPress(t, lane) {
     if (this.drums) {
       const pad = this.#findInWindow(t, (n) => !n.open && n.lanes[0] === lane);
       if (pad) this.#hit(pad, t);
-      else if (this.#anyPendingInWindow(t)) this.#overhit(t);
+      else if (this.#anyPendingNear(t)) this.#overhit(t);
       return;
     }
     const effective = this.held & ~this.sustainingMask;
@@ -275,7 +294,7 @@ export class GameEngine {
       if ((effective & target.mask) === target.mask) this.#hit(target, t);
       return;
     }
-    if (this.#anyPendingInWindow(t)) this.#overhit(t);
+    if (this.#anyPendingNear(t)) this.#overhit(t);
   }
 
   #strumMatches(n) {
@@ -296,7 +315,8 @@ export class GameEngine {
   #hit(note, t) {
     // Earlier pending notes were skipped over. When tapping, every lane is its own button and the
     // window is wide, so a note in another lane is still there to be tapped; only an earlier note
-    // in the same lane (or an earlier open note) was skipped. Strumming has one button: all are.
+    // that shares a lane with this one was skipped (open notes share the open bar). Strumming has
+    // one button: every earlier note was skipped.
     for (let i = this.nextIndex; i < note.id; i++) {
       const earlier = this.notes[i];
       if (this.state[i] === PENDING && (this.mode === 'strum' || this.#sameLane(earlier, note)))
@@ -315,16 +335,34 @@ export class GameEngine {
     if (note.sustain) this.activeSustains.push({ note, scoredUntil: Math.max(t, note.time) });
     this.offsets.push(offset);
     this.events.push({ type: 'hit', note, time: t, offset, grade });
-    if (note.spEnd && !this.brokenPhrases.has(note.spPhrase)) {
-      this.spMeter = Math.min(1, this.spMeter + SP_PER_PHRASE);
-      this.events.push({ type: 'spGain', time: t });
-    }
+    if (note.spEnd) this.#awardPhrase(note, t);
+    else if (this.deferredPhrases.has(note.spPhrase))
+      this.#awardPhrase(this.deferredPhrases.get(note.spPhrase), t);
     if (
       this.streak % NOTES_PER_MULTIPLIER === 0 &&
       this.streak <= NOTES_PER_MULTIPLIER * (MAX_MULTIPLIER - 1)
     ) {
       this.events.push({ type: 'multiplier', time: t, value: this.multiplier });
     }
+  }
+
+  /**
+   * Star Power for a finished phrase (its last note was hit). When tapping, an earlier note of the
+   * phrase in another lane can still be pending; the award waits until it is hit, and is lost if
+   * it is missed instead, as a phrase with a missed note never pays.
+   */
+  #awardPhrase(last, t) {
+    const phrase = last.spPhrase;
+    if (this.brokenPhrases.has(phrase)) return;
+    for (let i = this.nextIndex; i < last.id; i++) {
+      if (this.state[i] === PENDING && this.notes[i].spPhrase === phrase) {
+        this.deferredPhrases.set(phrase, last);
+        return;
+      }
+    }
+    this.deferredPhrases.delete(phrase);
+    this.spMeter = Math.min(1, this.spMeter + SP_PER_PHRASE);
+    this.events.push({ type: 'spGain', time: t });
   }
 
   #sameLane(a, b) {
@@ -334,7 +372,10 @@ export class GameEngine {
   #miss(note, t) {
     this.state[note.id] = MISSED;
     this.misses++;
-    if (note.spPhrase >= 0) this.brokenPhrases.add(note.spPhrase);
+    if (note.spPhrase >= 0) {
+      this.brokenPhrases.add(note.spPhrase);
+      this.deferredPhrases.delete(note.spPhrase);
+    }
     this.#breakStreak();
     this.events.push({ type: 'miss', note, time: t });
   }

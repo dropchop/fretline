@@ -27,7 +27,7 @@ export function initSettings() {
     timingHelp.textContent = `Perfect ±${p} ms, Good ±${g}, OK ±${o}, Bad ±${b}. Anything further out misses.`;
   };
   for (const [key, t] of Object.entries(TIMING_PRESETS)) timing.append(new Option(t.label, key));
-  timing.value = settings.timing in TIMING_PRESETS ? settings.timing : DEFAULT_TIMING;
+  timing.value = Object.hasOwn(TIMING_PRESETS, settings.timing) ? settings.timing : DEFAULT_TIMING;
   describeTiming();
   timing.addEventListener('change', () => {
     settings.timing = timing.value;

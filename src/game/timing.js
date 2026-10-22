@@ -27,7 +27,7 @@ const EDGE_SLACK = 1e-9;
 
 /** @param {string} timing a TIMING_PRESETS key; anything else gives the default */
 export function timingBands(timing) {
-  const preset = TIMING_PRESETS[timing] ?? TIMING_PRESETS[DEFAULT_TIMING];
+  const preset = TIMING_PRESETS[Object.hasOwn(TIMING_PRESETS, timing) ? timing : DEFAULT_TIMING];
   return preset.bandsMs.map((ms) => ms / 1000);
 }
 
