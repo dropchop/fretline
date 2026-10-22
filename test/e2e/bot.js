@@ -18,8 +18,10 @@ export function installBot({ skipEvery = 0 } = {}) {
       const n = s.engine.notes[next++];
       if (skipEvery && n.id % skipEvery === 0) continue;
       const hold = Math.max(50, ((n.endTime - n.time) * 1000) / s.speed);
+      // Tiles: open notes are the bar under the frets, and a lane is tapped well above the strikeline
+      // so the bot also exercises the full-height columns. Classic: open is higher up the highway.
       const points = n.open
-        ? [[layout.lanes[1], layout.strikeY - layout.laneWidth * 3]]
+        ? [[layout.lanes[1], layout.tiles ? layout.openY + 4 : layout.strikeY - layout.laneWidth * 3]]
         : n.lanes.map((l) => [layout.lanes[l], layout.strikeY]);
       for (const [x, y] of points) {
         const pid = id++;

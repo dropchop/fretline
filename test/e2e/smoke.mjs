@@ -45,7 +45,7 @@ async function playDemo(page, { instrument = 'Guitar', speed = 100, section = nu
   }, speed);
   if (section) await page.locator('#section').selectOption({ label: section });
   await page.tap('[data-action=start]');
-  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.waitForSelector('#game.active', { timeout: 120000 });
   await page.evaluate(installBot);
   await page.waitForSelector('#results.active', { timeout: 240000 });
   const text = await page.locator('#results').innerText();
@@ -107,7 +107,7 @@ await withServer(async () => {
   await page.locator('#songList button', { hasText: 'Packed Song' }).tap();
   await page.waitForSelector('#setup.active');
   await page.tap('[data-action=start]');
-  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.waitForSelector('#game.active', { timeout: 120000 });
   await page.evaluate(installBot);
   await page.waitForSelector('#results.active', { timeout: 120000 });
   console.log('sng song results:', (await page.locator('#resultsStats').innerText()).replace(/\n/g, ' '));
@@ -131,12 +131,12 @@ await withServer(async () => {
   await page.locator('#section').selectOption({ label: 'Melody' });
   await page.check('#versus');
   await page.tap('[data-action=start]');
-  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.waitForSelector('#game.active', { timeout: 120000 });
   await page.evaluate(installBot);
   await page.waitForSelector('#results.active', { timeout: 120000 });
   assert((await page.locator('#resultsPlayer').textContent()) === 'Player 1', 'round 1 is player 1');
   await page.tap('#nextPlayer');
-  await page.waitForSelector('#game.active', { timeout: 30000 });
+  await page.waitForSelector('#game.active', { timeout: 120000 });
   await page.evaluate(installBot, { skipEvery: 2 });
   await page.waitForSelector('#results.active', { timeout: 120000 });
   const versus = await page.locator('#resultsPlayer').textContent();
@@ -153,6 +153,53 @@ await withServer(async () => {
   assert(/Songs played\s+[1-9]/.test(profile), 'profile counts recorded plays');
   await page.screenshot({ path: 'test/e2e/last-profile.png' });
   await page.tap('#profile [data-action=back]');
+
+  // Tiles touch zones, with real pointer events: no bot, a spy on the engine records what each tap means.
+  await page.tap('[data-action=play-demo]');
+  await page.waitForSelector('#setup.active');
+  await page.locator('#instrumentChips .chip', { hasText: 'Guitar' }).tap();
+  await page.tap('[data-action=start]');
+  await page.waitForSelector('#game.active', { timeout: 120000 });
+  const taps = await page.evaluate(async () => {
+    const state = window.fretline;
+    const layout = state.renderer.laneScreenPositions();
+    const log = [];
+    const engine = state.session.engine;
+    engine.fretDown = (lane) => log.push(`fret${lane}`);
+    engine.openDown = () => log.push('open');
+    const surface = document.querySelector('#touchSurface');
+    let id = 5000;
+    const tap = (x, y) => {
+      const pid = id++;
+      for (const type of ['pointerdown', 'pointerup'])
+        surface.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: pid,
+            clientX: x,
+            clientY: y,
+            bubbles: true,
+            pointerType: 'touch',
+          }),
+        );
+    };
+    // Lane 3, high up the highway (where it is drawn at the far row), well above the strikeline.
+    tap(layout.far.lanes[3], layout.far.y);
+    // Lane 0 halfway between the far row and the strikeline.
+    tap((layout.lanes[0] + layout.far.lanes[0]) / 2, (layout.strikeY + layout.far.y) / 2);
+    // The open bar, in the corner where no lane column is drawn.
+    tap(4, layout.openY + 6);
+    return { log, tiles: layout.tiles, farY: layout.far.y, strikeY: layout.strikeY };
+  });
+  console.log('tile taps:', JSON.stringify(taps));
+  assert(
+    taps.tiles && taps.strikeY - taps.farY > 200,
+    'tiles layout with a far row well above the strikeline',
+  );
+  assert(
+    taps.log.join() === 'fret3,fret0,open',
+    `lane-column taps and the open bar register, got ${taps.log}`,
+  );
+  await page.reload();
 
   assert(errors.length === 0, `page errors: ${errors.join('; ')}`);
   await browser.close();

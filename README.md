@@ -6,8 +6,14 @@ built-in generated demo song so it works out of the box.
 
 - **3D highway** rendered with [Three.js](https://threejs.org/) (WebGL on an HTML5 `<canvas>`).
   The camera auto-fits so the five frets span a portrait screen, with the strikeline under your thumbs.
-- **Touch controls:** tap the fret circles as notes reach them, multi-touch chords, hold for sustains, slide
-  between frets. Tap anywhere higher up the highway for purple open notes. ★ button for Star Power.
+- **Note styles** (Settings → Note style): **Tiles** (default) draws each note as a tall rectangle that fills its
+  lane, Piano Tiles style, and **Classic** draws the round gems over fret rings. Both play the same five lanes,
+  so Clone Hero charts work unchanged.
+- **Touch controls:** multi-touch chords, hold for sustains, slide between lanes. ★ button for Star Power.
+  - Tiles: tap anywhere in a lane's column, up or down the screen, to play that fret. Open notes (and the drum
+    kick) are the full-width purple bar under the frets.
+  - Classic: tap the fret circles as notes reach them; tap anywhere higher up the highway for purple open notes.
+  - Left-handed mode mirrors the columns in both styles.
 - **Keyboard controls (desktop):** hold `1`–`5` or `A S D F G`, strum with `Enter` / `Space` / `↑` / `↓`,
   `Shift` or `Q` for Star Power, `Esc` to pause. HOPOs and taps can be hammered on without strumming.
 - **Clone Hero charts:** `.chart` and `.mid` charts; guitar, bass, rhythm, co-op and keys parts; all four difficulties;
@@ -15,8 +21,8 @@ built-in generated demo song so it works out of the box.
 - **Scoring:** 50 points per gem, 1x–4x multiplier every 10-note streak, sustain points, Star Power doubles the
   multiplier, guitar track muted on misses, star rating and results screen.
 - **Song library** stored on the device (IndexedDB), so songs stay after reloading.
-- **Settings:** note speed, audio latency calibration (with a tap-along calibrator), hit window, volume,
-  left-handed mode, controls mode.
+- **Settings:** note style, note speed, audio latency calibration (with a tap-along calibrator), hit window
+  (±100 ms by default), volume, left-handed mode, controls mode.
 - Installable as a full-screen, portrait-locked home-screen app, and playable offline after the first visit.
 - **High scores** per song, instrument and difficulty, shown in the library and on the song screen.
 - **Practice mode:** pick a section of the song and/or slow it down (50–100%). Practice runs aren't recorded.
@@ -85,7 +91,7 @@ Files app previews HTML without running scripts, so open the file in Safari via 
 | `src/game/session.js`   | One play-through: connects audio clock, engine, renderer, HUD and controls                                  |
 | `src/render/highway.js` | Three.js scene: highway, gems, sustains, frets, hit effects, camera fitting                                 |
 | `src/audio/player.js`   | Multi-stem Web Audio playback; latency-corrected song clock                                                 |
-| `src/input/controls.js` | Multi-touch and keyboard input                                                                              |
+| `src/input/controls.js` | Multi-touch (lane columns, open bar) and keyboard input                                                     |
 | `src/library/`          | Importing folders/zips/.sng, high scores, and storing songs in IndexedDB                                    |
 | `src/demo/demoSong.js`  | Generated demo chart and synthesized audio                                                                  |
 
