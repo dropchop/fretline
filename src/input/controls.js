@@ -38,7 +38,12 @@ export function touchTarget(x, y, layout) {
   if (tiles) {
     if (openY !== undefined && y >= openY) return 'open';
     if (far && far.y !== strikeY) {
-      const k = (y - strikeY) / (far.y - strikeY);
+      let k = (y - strikeY) / (far.y - strikeY);
+      // The lanes meet at the vanishing row and would cross over (mirror) beyond it, so stop just short.
+      const near = lanes[1] - lanes[0];
+      const spread = far.lanes[1] - far.lanes[0];
+      if (lanes.length > 1 && Math.abs(spread) < Math.abs(near))
+        k = Math.min(k, (near / (near - spread)) * 0.999);
       at = lanes.map((l, i) => l + (far.lanes[i] - l) * k);
     }
   } else if (y < strikeY - laneWidth * 1.1) {

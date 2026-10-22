@@ -42,6 +42,12 @@ describe('touchTarget, tiles', () => {
     // Halfway up (y=300) lane 1 is at x=(120+160)/2=140.
     expect(touchTarget(150, 300, tiles)).toBe(1);
   });
+  it('keeps the lane order for taps above the vanishing row', () => {
+    // The lanes meet at y=-300 here; a tap higher than that must not mirror them.
+    expect(touchTarget(265, -400, tiles)).toBe(4);
+    expect(touchTarget(150, -400, tiles)).toBe(0);
+    expect(touchTarget(135, -400, mirror(tiles))).toBe(4);
+  });
   it('treats the bar under the frets as open, edge to edge', () => {
     expect(touchTarget(10, 560, tiles)).toBe('open');
     expect(touchTarget(390, 600, tiles)).toBe('open');
