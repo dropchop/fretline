@@ -16,6 +16,8 @@ const SP_MIN_TO_ACTIVATE = 0.5;
 const SP_BEATS_FOR_FULL_METER = 32;
 /** A strum right after a hammer-on is forgiven for this long at most, however wide the hit window. */
 const STRUM_LENIENCY = 0.1;
+/** A press belongs to the earliest note in reach unless that note is later than this (the window before grades). */
+const EARLIEST_NOTE_WINDOW = 0.1;
 /** A stray press only counts as an overhit (and breaks the streak) with a note this close, as before the window grew. */
 const OVERHIT_WINDOW = 0.1;
 // Fraction of a perfect run's score (without star power) needed for 1-5 stars.
@@ -246,10 +248,10 @@ export class GameEngine {
 
   /**
    * The pending note in the hit window that satisfies `accept` which a press at t judges: the
-   * earliest one, as long as it would grade OK or better. Only when the earliest is late enough to
-   * be a Bad hit, and a later note in reach is closer, does the press go to that later note; so a
-   * run played steadily a little late keeps every note, while a note that was plainly skipped does
-   * not drag the rest of the run onto the wrong notes.
+   * earliest one, as the game always did, unless that note is more than EARLIEST_NOTE_WINDOW late.
+   * Then it is a note the player plainly skipped, and the press goes to the closest note in reach
+   * instead, so the rest of a run is not credited to the wrong notes. Within 100 ms a late press
+   * still belongs to the earlier note, so a run or chord played a little late keeps every note.
    */
   #findInWindow(t, accept) {
     let first = null;
@@ -262,7 +264,7 @@ export class GameEngine {
       first ??= n;
       if (!nearest || Math.abs(t - n.time) < Math.abs(t - nearest.time)) nearest = n;
     }
-    return first && gradeFor(t - first.time, this.bands) !== 'bad' ? first : nearest;
+    return first && t - first.time <= EARLIEST_NOTE_WINDOW + 1e-9 ? first : nearest;
   }
 
   /** A press that hits nothing only breaks the streak when a note is this close (see OVERHIT_WINDOW). */

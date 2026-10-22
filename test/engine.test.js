@@ -525,6 +525,51 @@ describe('runs played late, as they were judged with a fixed window', () => {
   }
 });
 
+describe('a skipped note in a run', () => {
+  it('P8: with the first note skipped, on-time taps at 120 ms gaps hit their own notes (Forgiving)', () => {
+    const specs = Array.from({ length: 16 }, (_, i) => ({ time: 1 + i * 0.12, lane: 0 }));
+    const e = new GameEngine(makeNotes(specs), { tempoMap });
+    specs.slice(1).forEach((s) => {
+      e.fretDown(0, s.time);
+      e.fretUp(0, s.time + 0.01);
+    });
+    e.update(10);
+    expect(e.state[0]).toBe(MISSED);
+    expect([...e.state].slice(1).every((x) => x === HIT)).toBe(true);
+    const stats = e.stats();
+    expect(stats.grades).toEqual({ perfect: 15, good: 0, ok: 0, bad: 0 });
+    expect(stats.misses).toBe(1);
+    expect(e.state[15]).toBe(HIT);
+  });
+
+  it('P10: the same when strumming', () => {
+    const specs = Array.from({ length: 16 }, (_, i) => ({ time: 1 + i * 0.12, lane: 0 }));
+    const e = new GameEngine(makeNotes(specs), { tempoMap, mode: 'strum' });
+    e.fretDown(0, 0.5);
+    specs.slice(1).forEach((s) => e.strum(s.time));
+    e.update(10);
+    expect(e.stats().grades.perfect).toBe(15);
+    expect(e.state[0]).toBe(MISSED);
+  });
+
+  it('P9: a chord and then a shared-lane single 80 ms later, completing finger 70 ms late (Normal)', () => {
+    const e = new GameEngine(
+      makeNotes([
+        { time: 1, lanes: [0, 1] },
+        { time: 1.08, lane: 1 },
+      ]),
+      { tempoMap, timing: 'normal' },
+    );
+    e.fretDown(0, 1.03);
+    e.fretDown(1, 1.07);
+    e.fretUp(0, 1.09);
+    e.fretUp(1, 1.09);
+    e.fretDown(1, 1.11);
+    e.update(10);
+    expect([...e.state]).toEqual([HIT, HIT]);
+  });
+});
+
 describe('star power phrases with notes in several lanes', () => {
   const phrase = () =>
     makeNotes([
