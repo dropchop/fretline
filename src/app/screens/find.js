@@ -2,6 +2,7 @@
 // Requests go out only from a search submit, a typing pause or a Download tap (see library/encore.js).
 import { $, show, registerActions } from '../router.js';
 import { EncoreClient, AutoSearch, EncoreError } from '../../library/encore.js';
+import { ResultList } from '../../library/encoreResults.js';
 import { handleImport } from './library.js';
 
 const formatLength = (ms) => {
@@ -15,12 +16,7 @@ export function initFind() {
   const list = $('#findResults');
   const more = $('#findMore');
   const input = $('#findQuery');
-  /** @type {import('../../library/encore.js').EncoreChart[]} */
-  let charts = [];
-  let total = 0;
-  let query = '';
-  let page = 1;
-  let token = 0;
+  const results = new ResultList(client);
   let downloading = false;
   const added = new Set();
 
@@ -35,7 +31,7 @@ export function initFind() {
 
   function render() {
     list.replaceChildren();
-    for (const chart of charts) {
+    for (const chart of results.charts) {
       const li = document.createElement('li');
       const info = document.createElement('div');
       info.className = 'find-info';
@@ -54,7 +50,15 @@ export function initFind() {
       const parts = document.createElement('span');
       parts.className = 'parts';
       parts.textContent = chart.parts.length
-        ? chart.parts.map((p) => `${p.label} ${p.level}`).join(' · ')
+        ? chart.parts
+            .map((p) =>
+              p.level !== null
+                ? `${p.label} ${p.level}`
+                : p.notes
+                  ? `${p.label} (${p.notes} notes)`
+                  : p.label,
+            )
+            .join(' · ')
         : 'No parts this game can play';
       info.append(title, meta, parts);
       const btn = document.createElement('button');
@@ -73,35 +77,43 @@ export function initFind() {
       li.append(info, btn);
       list.append(li);
     }
-    more.hidden = !(charts.length && charts.length < total);
+    more.hidden = !results.hasMore;
+    more.disabled = results.busy;
   }
 
-  async function runSearch(q, nextPage = 1) {
-    const mine = ++token;
-    query = q;
-    page = nextPage;
-    if (nextPage === 1) {
-      charts = [];
-      total = 0;
-      render();
-    }
+  async function runSearch(q) {
     say('Searching…');
+    render();
     try {
-      const result = await client.search(q, nextPage);
-      if (mine !== token) return;
-      charts = nextPage === 1 ? result.charts : [...charts, ...result.charts];
-      total = result.total;
-      render();
-      say(
-        charts.length
-          ? `Showing ${charts.length} of ${total} for “${q}”.`
-          : `Nothing found for “${q}”. Try a different spelling or fewer words.`,
-      );
+      await results.search(q);
     } catch (err) {
-      if (mine !== token) return;
       say(explain(err), true);
       render();
+      return;
     }
+    // A newer search can have replaced this one while it was in flight; it reports for itself.
+    if (results.query !== q) return;
+    render();
+    say(
+      results.charts.length
+        ? `Showing ${results.charts.length} of ${results.total} for “${q}”.`
+        : `Nothing found for “${q}”. Try a different spelling or fewer words.`,
+    );
+  }
+
+  async function showMore() {
+    if (results.busy || !results.hasMore) return;
+    say('Loading more…');
+    render();
+    try {
+      await results.more();
+    } catch (err) {
+      say(explain(err), true);
+      render();
+      return;
+    }
+    render();
+    say(`Showing ${results.charts.length} of ${results.total} for “${results.query}”.`);
   }
 
   async function addChart(chart, btn) {
@@ -110,10 +122,10 @@ export function initFind() {
     btn.disabled = true;
     btn.textContent = 'Downloading…';
     try {
-      const buffer = await client.download(chart.md5, (f) => {
+      const blob = await client.download(chart.md5, (f) => {
         btn.textContent = `Downloading ${Math.round(f * 100)}%`;
       });
-      const file = new File([buffer], `${chart.md5}.sng`, { type: 'application/octet-stream' });
+      const file = new File([blob], `${chart.md5}.sng`, { type: 'application/octet-stream' });
       const saved = await handleImport([file]);
       if (saved) {
         added.add(chart.md5);
@@ -138,6 +150,6 @@ export function initFind() {
     e.preventDefault();
     auto.submit(input.value);
   });
-  more.addEventListener('click', () => runSearch(query, page + 1));
+  more.addEventListener('click', showMore);
   registerActions({ 'find-songs': () => show('find') });
 }

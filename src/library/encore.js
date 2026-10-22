@@ -5,8 +5,10 @@
 //   - sends a request only when the caller asks (a search submit, a typing pause, a Download tap);
 //     it never polls, prefetches or refreshes in the background;
 //   - answers a repeated search from a session cache without a request;
-//   - keeps itself under REQUEST_LIMIT requests per WINDOW_MS (the site allows about 50 per window)
-//     and at least MIN_GAP_MS apart, by refusing the extra calls rather than queueing them;
+//   - keeps itself under REQUEST_LIMIT searches or downloads per WINDOW_MS and at least MIN_GAP_MS apart,
+//     by refusing the extra calls rather than queueing them. A browser sends a CORS preflight (OPTIONS)
+//     before each search POST, since a JSON body is not a "simple" request, so that is up to twice as many
+//     HTTP requests, still well under the roughly 50 per window the site allows;
 //   - after a 429 or a 5xx, makes no request at all until a back-off has passed, and never retries by itself.
 // Songs are fetched straight from the site into the user's browser; nothing passes through our servers.
 
@@ -15,7 +17,7 @@ export const fileUrl = (md5) => `https://files.enchor.us/${md5}.sng`;
 export const SITE_URL = 'https://www.enchor.us/';
 
 export const PER_PAGE = 8;
-/** At most this many requests in any WINDOW_MS (searches and downloads together). */
+/** At most this many searches or downloads in any WINDOW_MS (a search is also preceded by a preflight). */
 export const REQUEST_LIMIT = 10;
 export const WINDOW_MS = 60_000;
 /** Least time between two requests. */
@@ -26,18 +28,18 @@ export const BACKOFF_MAX_MS = 120_000;
 /** Typing pauses this long before a search is sent, and only for queries of at least MIN_QUERY_LENGTH. */
 export const TYPING_DELAY_MS = 800;
 export const MIN_QUERY_LENGTH = 3;
-/** A song bigger than this is not fetched into memory. */
-export const MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024;
+/** A song bigger than this is not downloaded; the import then holds about three copies of it at once. */
+export const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 const CACHE_LIMIT = 40;
 
 /** Parts of a chart this game can play, from the `diff_*` fields of a search result. */
 const PARTS = [
-  ['guitar', 'Guitar'],
-  ['guitar_coop', 'Co-op guitar'],
-  ['rhythm', 'Rhythm'],
-  ['bass', 'Bass'],
-  ['keys', 'Keys'],
-  ['drums', 'Drums'],
+  ['guitar', 'Guitar', 'guitar'],
+  ['guitar_coop', 'Co-op guitar', 'guitarcoop'],
+  ['rhythm', 'Rhythm', 'rhythm'],
+  ['bass', 'Bass', 'bass'],
+  ['keys', 'Keys', 'keys'],
+  ['drums', 'Drums', 'drums'],
 ];
 
 /**
@@ -69,7 +71,8 @@ export class EncoreError extends Error {
  * @property {string} album
  * @property {string} year
  * @property {number} lengthMs 0 when unknown
- * @property {{label: string, level: number}[]} parts parts this game can play, level 0-6
+ * @property {{label: string, level: number | null, notes: number}[]} parts parts this game can play; level is
+ *   the 0-6 difficulty rating, null when the index has none; notes is the expert note count (0 if unknown)
  */
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -80,10 +83,20 @@ export function parseChart(raw) {
   const md5 = text(raw.md5).toLowerCase();
   const name = text(raw.name);
   if (!/^[0-9a-f]{32}$/.test(md5) || !name) return null;
+  // `diff_*` is -1 for a part the chart's rating doesn't cover, but the chart can still have the notes:
+  // notesData lists the parts it really contains, so fall back to that.
+  const nd = raw.notesData && typeof raw.notesData === 'object' ? raw.notesData : {};
+  const instruments = Array.isArray(nd.instruments) ? nd.instruments : [];
+  const counts = Array.isArray(nd.noteCounts) ? nd.noteCounts : [];
   const parts = [];
-  for (const [key, label] of PARTS) {
+  for (const [key, label, instrument] of PARTS) {
     const level = raw[`diff_${key}`];
-    if (typeof level === 'number' && level >= 0) parts.push({ label, level });
+    const rated = typeof level === 'number' && level >= 0;
+    const present = instruments.includes(instrument);
+    if (!rated && !present) continue;
+    const expert = counts.find((c) => c?.instrument === instrument && c.difficulty === 'expert');
+    const notes = typeof expert?.count === 'number' ? expert.count : 0;
+    parts.push({ label, level: rated ? level : null, notes });
   }
   return {
     md5,
@@ -101,16 +114,20 @@ export function parseChart(raw) {
  * @typedef {object} EncoreClientOptions
  * @property {typeof fetch} [fetch]
  * @property {() => number} [now] milliseconds, for tests
+ * @property {number} [maxBytes] download size cap, for tests
  */
 
 export class EncoreClient {
   /** @param {EncoreClientOptions} [options] */
-  constructor({ fetch: fetchImpl, now = () => Date.now() } = {}) {
+  constructor({ fetch: fetchImpl, now = () => Date.now(), maxBytes = MAX_DOWNLOAD_BYTES } = {}) {
+    this.maxBytes = maxBytes;
     this.fetch = fetchImpl ?? ((...args) => fetch(...args));
     this.now = now;
     /** Times of the requests sent in the current window. */
     this.sent = [];
     this.blockedUntil = 0;
+    /** Status that caused the current back-off (429 or a 5xx). */
+    this.blockedBy = 0;
     this.failures = 0;
     /** @type {Map<string, {charts: EncoreChart[], total: number}>} */
     this.cache = new Map();
@@ -125,8 +142,10 @@ export class EncoreClient {
       const waitMs = this.blockedUntil - now;
       throw new EncoreError(
         'backoff',
-        `Chorus Encore asked us to slow down. Try again in ${Math.ceil(waitMs / 1000)} s.`,
-        { waitMs },
+        this.blockedBy === 429
+          ? `Chorus Encore asked us to slow down. Try again in ${Math.ceil(waitMs / 1000)} s.`
+          : `Chorus Encore had an error a moment ago, so we're pausing. Try again in ${Math.ceil(waitMs / 1000)} s.`,
+        { waitMs, status: this.blockedBy },
       );
     }
     this.sent = this.sent.filter((t) => now - t < WINDOW_MS);
@@ -150,7 +169,7 @@ export class EncoreClient {
 
   /** @param {Response} res */
   #checkStatus(res) {
-    if (res.ok || res.status === 206) {
+    if (res.ok) {
       this.failures = 0;
       return;
     }
@@ -161,6 +180,7 @@ export class EncoreClient {
         Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(BACKOFF_MAX_MS, retryAfter * 1000) : own;
       this.failures++;
       this.blockedUntil = this.now() + Math.max(waitMs, own);
+      this.blockedBy = res.status;
       throw new EncoreError(
         'backoff',
         res.status === 429
@@ -226,10 +246,11 @@ export class EncoreClient {
   }
 
   /**
-   * Downloads a chart's .sng into memory, in the user's browser only.
+   * Downloads a chart's .sng, in the user's browser only. The bytes are counted as they arrive, so the
+   * size cap holds even when the server doesn't say how big the file is.
    * @param {string} md5
    * @param {(fraction: number) => void} [onProgress] called with 0-1 when the size is known
-   * @returns {Promise<ArrayBuffer>}
+   * @returns {Promise<Blob>}
    */
   async download(md5, onProgress) {
     if (!/^[0-9a-f]{32}$/.test(md5)) throw new EncoreError('shape', 'That chart has no usable id.');
@@ -241,12 +262,17 @@ export class EncoreClient {
       throw new EncoreError('network', "Couldn't reach Chorus Encore. Check your connection.");
     }
     this.#checkStatus(res);
+    const tooBig = () => new EncoreError('too-big', 'That song is too large to add on this device.');
     const size = Number(res.headers?.get?.('content-length')) || 0;
-    if (size > MAX_DOWNLOAD_BYTES) {
+    if (size > this.maxBytes) {
       res.body?.cancel?.().catch(() => {});
-      throw new EncoreError('too-big', 'That song is too large to add on this device.');
+      throw tooBig();
     }
-    if (!res.body?.getReader || !size) return res.arrayBuffer();
+    if (!res.body?.getReader) {
+      const blob = await res.blob();
+      if (blob.size > this.maxBytes) throw tooBig();
+      return blob;
+    }
     const reader = res.body.getReader();
     const chunks = [];
     let got = 0;
@@ -254,19 +280,19 @@ export class EncoreClient {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
         got += value.length;
-        if (got > MAX_DOWNLOAD_BYTES) {
+        if (got > this.maxBytes) {
           reader.cancel().catch(() => {});
-          throw new EncoreError('too-big', 'That song is too large to add on this device.');
+          throw tooBig();
         }
-        onProgress?.(Math.min(1, got / size));
+        chunks.push(value);
+        if (size) onProgress?.(Math.min(1, got / size));
       }
     } catch (err) {
       if (err instanceof EncoreError) throw err;
       throw new EncoreError('network', 'The download was interrupted. Try again.');
     }
-    return new Blob(chunks).arrayBuffer();
+    return new Blob(chunks, { type: 'application/octet-stream' });
   }
 }
 
