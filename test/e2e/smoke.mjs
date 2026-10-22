@@ -85,7 +85,7 @@ await withServer(async () => {
   const songFile = readFileSync(path.join(fixtures, 'packed.sng'));
   await ctx.route(/^https?:\/\/[^/]*enchor\.us\//, (route) => {
     const req = route.request();
-    const url = new URL(req.url());
+    const url = new globalThis.URL(req.url());
     if (req.method() === 'OPTIONS')
       return route.fulfill({
         status: 204,
