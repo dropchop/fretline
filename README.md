@@ -35,12 +35,12 @@ built-in generated demo song so it works out of the box.
   | Normal                | 20 ms   | 40 ms | 65 ms  | 100 ms           |
   | Strict                | 14 ms   | 28 ms | 46 ms  | 70 ms            |
 
-  A tap judges the earliest note in reach, as long as it would grade OK or better; if that note is already so
-  late it would only be Bad and a later note of the run is closer, the tap goes to the later note and the
-  earlier one counts as missed. A run played steadily a little late therefore keeps every note. When tapping,
-  a later note that is hit first only skips earlier notes in its own lane; notes in other lanes can still be
-  tapped until their own window ends, and a Star Power phrase waits for them before it pays. A stray tap
-  only breaks the streak when a note is within 100 ms.
+  A tap judges the earliest note in reach, as it always did, unless that note is more than 100 ms late: then
+  it was plainly skipped, the tap goes to the closest note of the run and the earlier one counts as missed.
+  A run played steadily a little late therefore keeps every note, and on-time taps after a skipped note are
+  not credited to the note before. When tapping, a later note that is hit first only skips earlier notes in
+  its own lane; notes in other lanes can still be tapped until their own window ends, and a Star Power
+  phrase waits for them before it pays. A stray tap only breaks the streak when a note is within 100 ms.
 
 - **Scoring:** 50 points per gem (times the grade's share), 1x–4x multiplier every 10-note streak, sustain
   points, Star Power doubles the multiplier, guitar track muted on misses, star rating and results screen.
