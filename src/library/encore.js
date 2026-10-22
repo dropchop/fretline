@@ -280,7 +280,15 @@ export class AutoSearch {
    * @param {(query: string) => void} run called when a search should be sent
    * @param {{delay?: number, setTimer?: typeof setTimeout, clearTimer?: typeof clearTimeout}} [options]
    */
-  constructor(run, { delay = TYPING_DELAY_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  constructor(
+    run,
+    {
+      delay = TYPING_DELAY_MS,
+      // Wrapped: the browser's timers throw "Illegal invocation" when called as methods of another object.
+      setTimer = (fn, ms) => setTimeout(fn, ms),
+      clearTimer = (id) => clearTimeout(id),
+    } = {},
+  ) {
     this.run = run;
     this.delay = delay;
     this.setTimer = setTimer;

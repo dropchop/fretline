@@ -310,6 +310,29 @@ describe('no request without a user action', () => {
     }
   });
 
+  it('uses the global timers in a way a browser accepts', async () => {
+    // Browsers throw "Illegal invocation" when setTimeout is called with another object as `this`.
+    const timers = [];
+    vi.stubGlobal('setTimeout', function (/** @type {() => void} */ fn) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      timers.push(fn);
+      return timers.length;
+    });
+    vi.stubGlobal('clearTimeout', function () {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    });
+    try {
+      const run = vi.fn();
+      const auto = new AutoSearch(run);
+      auto.input('test');
+      auto.input('tests');
+      timers[timers.length - 1]();
+      expect(run).toHaveBeenCalledWith('tests');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('types at least half a second apart', () => {
     expect(TYPING_DELAY_MS).toBeGreaterThanOrEqual(500);
   });
