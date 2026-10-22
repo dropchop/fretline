@@ -236,9 +236,14 @@ export class HighwayRenderer {
     return LANE_SPACING * (5 / this.laneCount) - TILE_GAP;
   }
 
+  /** Width of the open bar and of open-note tiles: all the lanes together, minus a gap. */
+  openBarWidth() {
+    return this.laneCount * LANE_SPACING * (5 / this.laneCount) - TILE_GAP;
+  }
+
   /** The purple tap bar under the frets where open notes (and the drum kick) are played. */
   #buildOpenBar() {
-    const width = this.laneCount * LANE_SPACING * (5 / this.laneCount) - TILE_GAP;
+    const width = this.openBarWidth();
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(width, 0.06, OPEN_BAR_DEPTH),
       new THREE.MeshStandardMaterial({
@@ -563,7 +568,7 @@ export class HighwayRenderer {
     if (n.open) {
       const m = this.tilePool.next();
       m.material = state === MISSED ? this.mat.openMissed : isSp ? this.mat.sp : this.mat.open;
-      m.scale.set(this.laneCount * LANE_SPACING * (5 / this.laneCount) - TILE_GAP, TILE_HEIGHT, size);
+      m.scale.set(this.openBarWidth(), TILE_HEIGHT, size);
       m.position.set(0, 0.1, zMid);
       return;
     }

@@ -18,6 +18,7 @@ function assert(cond, msg) {
 async function withServer(fn) {
   const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
     stdio: 'ignore',
+    detached: true, // own process group, so the vite child under npx is stopped too
   });
   try {
     for (let i = 0; i < 50; i++) {
@@ -30,7 +31,7 @@ async function withServer(fn) {
     }
     await fn();
   } finally {
-    server.kill();
+    process.kill(-server.pid);
   }
 }
 
@@ -188,7 +189,15 @@ await withServer(async () => {
     tap((layout.lanes[0] + layout.far.lanes[0]) / 2, (layout.strikeY + layout.far.y) / 2);
     // The open bar, in the corner where no lane column is drawn.
     tap(4, layout.openY + 6);
-    return { log, tiles: layout.tiles, farY: layout.far.y, strikeY: layout.strikeY };
+    // Left-handed: the far row has to be mirrored with the strikeline row, or the columns would cross.
+    state.renderer.leftHanded = true;
+    const left = state.renderer.laneScreenPositions();
+    state.renderer.leftHanded = false;
+    const mid = left.lanes[2];
+    const leftMirrored =
+      left.lanes[0] > left.lanes[4] &&
+      left.lanes.every((x, i) => Math.sign(x - mid) === Math.sign(left.far.lanes[i] - mid));
+    return { log, leftMirrored, tiles: layout.tiles, farY: layout.far.y, strikeY: layout.strikeY };
   });
   console.log('tile taps:', JSON.stringify(taps));
   assert(
@@ -199,6 +208,7 @@ await withServer(async () => {
     taps.log.join() === 'fret3,fret0,open',
     `lane-column taps and the open bar register, got ${taps.log}`,
   );
+  assert(taps.leftMirrored, 'left-handed mode mirrors the far lane row with the strikeline row');
   await page.reload();
 
   assert(errors.length === 0, `page errors: ${errors.join('; ')}`);
