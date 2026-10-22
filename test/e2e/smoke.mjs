@@ -48,6 +48,12 @@ async function playDemo(page, { instrument = 'Guitar', speed = 100, section = nu
   await page.tap('[data-action=start]');
   await page.waitForSelector('#game.active', { timeout: 120000 });
   await page.evaluate(installBot);
+  // A grade word shows under the score after the first hit.
+  await page.waitForFunction(
+    () => /^(Perfect|Good|OK|Bad)/.test(document.querySelector('[data-hud=judge]')?.textContent ?? ''),
+    null,
+    { timeout: 60000 },
+  );
   await page.waitForSelector('#results.active', { timeout: 240000 });
   const text = await page.locator('#results').innerText();
   const hit = text.match(/Notes hit\s+(\d+) \/ (\d+)/);
@@ -69,11 +75,8 @@ await withServer(async () => {
     userAgent: devices['Pixel 7'].userAgent,
     deviceScaleFactor: 1,
   });
-  // CI runners render slowly, so taps can land a frame late. Use the widest hit window the game
-  // offers: the test checks that input, judging and scoring work, not frame timing.
-  await ctx.addInitScript(() =>
-    localStorage.setItem('fretline.settings', JSON.stringify({ hitWindowMs: 140 })),
-  );
+  // CI runners render slowly, so taps can land a frame late. The default Forgiving timing is the
+  // widest the game offers: the test checks that input, judging and scoring work, not frame timing.
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -85,6 +88,17 @@ await withServer(async () => {
   console.log('guitar @60%:', guitar.hits, '/', guitar.total);
   assert(guitar.hits / guitar.total > 0.85, 'guitar bot should hit >85%');
   assert(guitar.text.includes('Practice run'), 'slowed run is a practice run');
+  // The results screen counts hits per grade, and the counts add up to the notes hit.
+  const gradeCounts = ['Perfect', 'Good', 'OK', 'Bad'].map((g) => {
+    const m = guitar.text.match(new RegExp(`${g}\\s+(\\d+)`));
+    assert(m, `results show a ${g} count`);
+    return Number(m[1]);
+  });
+  assert(
+    gradeCounts.reduce((a, b) => a + b, 0) === guitar.hits,
+    `grade counts ${gradeCounts} add up to the ${guitar.hits} hits`,
+  );
+  assert(/Early \/ late\s+\d+ \/ \d+/.test(guitar.text), 'results show early / late');
 
   const drums = await playDemo(page, { instrument: 'Drums', speed: 60, section: 'Chords' });
   console.log('drums section @60%:', drums.hits, '/', drums.total);

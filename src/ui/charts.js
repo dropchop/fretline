@@ -11,7 +11,7 @@ const el = (tag, attrs) => {
  * Histogram of hit offsets in ms, early on the left, late on the right.
  * @param {number[]} offsets seconds
  */
-export function timingHistogram(offsets, { rangeMs = 100, bins = 20 } = {}) {
+export function timingHistogram(offsets, { rangeMs = 200, bins = 20, perfectMs = 40 } = {}) {
   const w = 300;
   const h = 80;
   const counts = new Array(bins).fill(0);
@@ -25,7 +25,7 @@ export function timingHistogram(offsets, { rangeMs = 100, bins = 20 } = {}) {
   counts.forEach((c, i) => {
     const bh = (c / max) * (h - 16);
     const x = (i / bins) * w;
-    const centre = Math.abs(i - (bins - 1) / 2) <= 1;
+    const centre = Math.abs(((i + 0.5) / bins - 0.5) * 2 * rangeMs) <= perfectMs;
     svg.append(
       el('rect', {
         x: x + 1,

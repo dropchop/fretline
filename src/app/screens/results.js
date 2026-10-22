@@ -65,10 +65,16 @@ export function showResults(stats) {
     ['Accuracy', `${Math.round(stats.accuracy * 100)}%`],
     ['Best streak', stats.maxStreak],
     ['Missed', stats.misses],
+    ['Perfect', stats.grades.perfect],
+    ['Good', stats.grades.good],
+    ['OK', stats.grades.ok],
+    ['Bad', stats.grades.bad],
     ['Early / late', `${stats.early} / ${stats.late}`],
     ['Avg timing', `${stats.meanOffsetMs > 0 ? '+' : ''}${Math.round(stats.meanOffsetMs)} ms`],
   ]);
-  $('#resultsTiming').replaceChildren(timingHistogram(stats.offsets));
+  $('#resultsTiming').replaceChildren(
+    timingHistogram(stats.offsets, { rangeMs: stats.windowMs, perfectMs: stats.perfectMs }),
+  );
   $('#resultsTimingNote').textContent = timingNote(stats);
 
   const nextTurn = !!versus && versus.round === 1;
