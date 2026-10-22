@@ -5,10 +5,19 @@ export function installBot({ skipEvery = 0 } = {}) {
   const surface = document.querySelector('#touchSurface');
   let id = 1000;
   let next = 0;
-  const fire = (type, x, y, pid) =>
+  // The layout is in the surface's own coordinates; the surface can sit below the portrait HUD strip.
+  const fire = (type, x, y, pid) => {
+    const rect = surface.getBoundingClientRect();
     surface.dispatchEvent(
-      new PointerEvent(type, { pointerId: pid, clientX: x, clientY: y, bubbles: true, pointerType: 'touch' }),
+      new PointerEvent(type, {
+        pointerId: pid,
+        clientX: x + rect.left,
+        clientY: y + rect.top,
+        bubbles: true,
+        pointerType: 'touch',
+      }),
     );
+  };
   const tick = () => {
     const s = state.session;
     if (!s || !s.running) return;

@@ -184,14 +184,15 @@ await withServer(async () => {
     engine.openDown = () => log.push('open');
     const surface = document.querySelector('#touchSurface');
     let id = 5000;
+    const box = surface.getBoundingClientRect();
     const tap = (x, y) => {
       const pid = id++;
       for (const type of ['pointerdown', 'pointerup'])
         surface.dispatchEvent(
           new PointerEvent(type, {
             pointerId: pid,
-            clientX: x,
-            clientY: y,
+            clientX: x + box.left,
+            clientY: y + box.top,
             bubbles: true,
             pointerType: 'touch',
           }),
@@ -203,6 +204,14 @@ await withServer(async () => {
     tap((layout.lanes[0] + layout.far.lanes[0]) / 2, (layout.strikeY + layout.far.y) / 2);
     // The open bar, in the corner where no lane column is drawn.
     tap(4, layout.openY + 6);
+    // Lane 4 at the very top of the highway: nothing from the HUD may sit over it and take the touch.
+    const topY = 4;
+    const k = (topY - layout.strikeY) / (layout.far.y - layout.strikeY);
+    const topX = layout.lanes[4] + (layout.far.lanes[4] - layout.lanes[4]) * k;
+    const topHit = document.elementFromPoint(topX + box.left, topY + box.top);
+    tap(topX, topY);
+    const controls = [...document.querySelectorAll('.pause-button, .sp-button')];
+    const hudClear = controls.every((b) => b.getBoundingClientRect().bottom <= box.top + 0.5);
     // Left-handed: the far row has to be mirrored with the strikeline row, or the columns would cross.
     state.renderer.leftHanded = true;
     const left = state.renderer.laneScreenPositions();
@@ -211,7 +220,15 @@ await withServer(async () => {
     const leftMirrored =
       left.lanes[0] > left.lanes[4] &&
       left.lanes.every((x, i) => Math.sign(x - mid) === Math.sign(left.far.lanes[i] - mid));
-    return { log, leftMirrored, tiles: layout.tiles, farY: layout.far.y, strikeY: layout.strikeY };
+    return {
+      log,
+      topHitIsSurface: topHit === surface,
+      hudClear,
+      leftMirrored,
+      tiles: layout.tiles,
+      farY: layout.far.y,
+      strikeY: layout.strikeY,
+    };
   });
   console.log('tile taps:', JSON.stringify(taps));
   assert(
@@ -219,9 +236,11 @@ await withServer(async () => {
     'tiles layout with a far row well above the strikeline, on screen',
   );
   assert(
-    taps.log.join() === 'fret3,fret0,open',
+    taps.log.join() === 'fret3,fret0,open,fret4',
     `lane-column taps and the open bar register, got ${taps.log}`,
   );
+  assert(taps.topHitIsSurface, 'the top of lane 4 is the touch surface, not a HUD button');
+  assert(taps.hudClear, 'the pause and star power buttons sit above the touch surface');
   assert(taps.leftMirrored, 'left-handed mode mirrors the far lane row with the strikeline row');
   await page.reload();
 
