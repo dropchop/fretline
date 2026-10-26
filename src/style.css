@@ -919,7 +919,8 @@ body.sp-active #game {
   font-size: 0.8rem;
 }
 
-.find-add:disabled {
+.find-add:disabled,
+#findMore:disabled {
   opacity: 0.6;
   cursor: default;
 }

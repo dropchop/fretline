@@ -104,9 +104,10 @@ export function initFind() {
   async function showMore() {
     if (results.busy || !results.hasMore) return;
     say('Loading more…');
+    const loading = results.more();
     render();
     try {
-      await results.more();
+      await loading;
     } catch (err) {
       say(explain(err), true);
       render();

@@ -85,10 +85,16 @@ await withServer(async () => {
   // widest the game offers: the test checks that input, judging and scoring work, not frame timing.
   // Chorus Encore is never contacted for real: both of its hosts are answered here, and counted.
   const enchor = { searches: [], downloads: [], other: [] };
+  let holdPageTwo = false;
+  let pageTwoRequested;
+  const pageTwoSeen = new Promise((resolve) => {
+    pageTwoRequested = resolve;
+  });
+  let releasePageTwo;
   const cors = { 'access-control-allow-origin': '*' };
   const searchReply = readFileSync(path.join(fixtures, 'enchor-search.json'));
   const songFile = readFileSync(path.join(fixtures, 'packed.sng'));
-  await ctx.route(/^https?:\/\/[^/]*enchor\.us\//, (route) => {
+  await ctx.route(/^https?:\/\/[^/]*enchor\.us\//, async (route) => {
     const req = route.request();
     const url = new globalThis.URL(req.url());
     if (req.method() === 'OPTIONS')
@@ -101,7 +107,15 @@ await withServer(async () => {
         },
       });
     if (url.hostname === 'api.enchor.us' && url.pathname === '/search') {
-      enchor.searches.push(req.postDataJSON());
+      const body = req.postDataJSON();
+      enchor.searches.push(body);
+      if (holdPageTwo && body.page === 2) {
+        holdPageTwo = false;
+        pageTwoRequested(body);
+        await new Promise((resolve) => {
+          releasePageTwo = resolve;
+        });
+      }
       return route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -172,6 +186,42 @@ await withServer(async () => {
   await page.tap('#findForm button[type=submit]');
   await page.waitForFunction(() => /for “ab”/.test(document.querySelector('#findStatus').textContent));
   assert(enchor.searches.length === 2, `a submit sends a search, got ${enchor.searches.length}`);
+  await page.waitForTimeout(1100); // the client keeps one second between requests
+  const findMore = page.locator('#findMore');
+  const enabledOpacity = await findMore.evaluate((button) => getComputedStyle(button).opacity);
+  assert(Number(enabledOpacity) === 1, `Show more starts at full opacity, got ${enabledOpacity}`);
+  const beforePageTwo = await page.locator('#findResults li').count();
+  holdPageTwo = true;
+  try {
+    await findMore.tap();
+    const requestedBody = await Promise.race([
+      pageTwoSeen,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timed out waiting for page 2 request')), 5000),
+      ),
+    ]);
+    assert(
+      JSON.stringify(requestedBody) === JSON.stringify({ search: 'ab', per_page: 8, page: 2 }),
+      `page 2 request body, got ${JSON.stringify(requestedBody)}`,
+    );
+    await page.waitForFunction(() => document.querySelector('#findMore')?.disabled === true);
+    const loadingOpacity = await findMore.evaluate((button) => getComputedStyle(button).opacity);
+    assert(Number(loadingOpacity) < 1, `Show more is dimmed while page 2 is held, got ${loadingOpacity}`);
+    await page.screenshot({ path: path.join(here, 'last-find-loading.png') });
+  } finally {
+    releasePageTwo?.();
+  }
+  await page.waitForFunction(
+    (count) => document.querySelectorAll('#findResults li').length > count,
+    beforePageTwo,
+  );
+  assert(
+    (await page.locator('#findStatus').textContent()).includes('Showing 6 of 143'),
+    'page 2 updates the status',
+  );
+  assert(!(await findMore.isDisabled()), 'Show more is enabled again after page 2');
+  assert(enchor.searches.length === 3, `page 2 adds one search request, got ${enchor.searches.length}`);
+  assert(enchor.searches[2].page === 2, `third search is page 2, got ${JSON.stringify(enchor.searches[2])}`);
   await page.waitForTimeout(1100); // the client keeps one second between requests
   await page.locator('#findResults .find-add').first().tap();
   await page.waitForFunction(
