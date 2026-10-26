@@ -220,6 +220,11 @@ await withServer(async () => {
     'page 2 updates the status',
   );
   assert(!(await findMore.isDisabled()), 'Show more is enabled again after page 2');
+  const restoredOpacity = await findMore.evaluate((button) => getComputedStyle(button).opacity);
+  assert(
+    restoredOpacity === enabledOpacity,
+    `Show more opacity returns to its enabled value, got ${restoredOpacity} (expected ${enabledOpacity})`,
+  );
   assert(enchor.searches.length === 3, `page 2 adds one search request, got ${enchor.searches.length}`);
   assert(enchor.searches[2].page === 2, `third search is page 2, got ${JSON.stringify(enchor.searches[2])}`);
   await page.waitForTimeout(1100); // the client keeps one second between requests
